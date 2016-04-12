@@ -1,0 +1,14 @@
+{
+	"ImportPath": "github.com/cogolabs/lgrep",
+	"GoVersion": "go1.6",
+	"Packages": [
+		"."
+	],
+	"Deps": [
+		{
+			"ImportPath": "gopkg.in/olivere/elastic.v3",
+			"Comment": "v3.0.30",
+			"Rev": "bff1355ba593686c7bfc1abb7a8573f34a9c29d1"
+		}
+	]
+}
