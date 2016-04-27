@@ -1,0 +1,76 @@
+{
+  "fielddata_fields": [
+    "@timestamp",
+    "timestamp8601",
+    "time",
+    "to",
+    "from"
+  ],
+  "script_fields": null,
+  "fields": [
+    "*",
+    "_source"
+  ],
+  "aggs": {
+    "2": {
+      "date_histogram": {
+        "extended_bounds": {
+          "max": 1461788659689,
+          "min": 1461787759689
+        },
+        "min_doc_count": 0,
+        "time_zone": "America\/New_York",
+        "interval": "30s",
+        "field": "@timestamp"
+      }
+    }
+  },
+  "query": {
+    "filtered": {
+      "filter": {
+        "bool": {
+          "must_not": [],
+          "must": [
+            {
+              "range": {
+                "@timestamp": {
+                  "format": "epoch_millis",
+                  "lte": 1461788659689,
+                  "gte": 1461787759689
+                }
+              }
+            }
+          ]
+        }
+      },
+      "query": {
+        "query_string": {
+          "analyze_wildcard": true,
+          "query": "service:etcd AND dial"
+        }
+      }
+    }
+  },
+  "highlight": {
+    "fragment_size": 2147483647,
+    "require_field_match": false,
+    "fields": {
+      "*": null
+    },
+    "post_tags": [
+      "@\/kibana-highlighted-field@"
+    ],
+    "pre_tags": [
+      "@kibana-highlighted-field@"
+    ]
+  },
+  "sort": [
+    {
+      "@timestamp": {
+        "unmapped_type": "boolean",
+        "order": "desc"
+      }
+    }
+  ],
+  "size": 500
+}

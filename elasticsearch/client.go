@@ -14,9 +14,9 @@ type Client struct {
 
 // Search Elasticsearch using search string and return the source of
 // the returned documents.
-func (c Client) Search(search string, index string, count int, offset int) (sources []*json.RawMessage, err error) {
+func (c Client) Search(search string, index string, count int) (sources []*json.RawMessage, err error) {
 	q := elastic.NewQueryStringQuery(search)
-	result, err := c.client.Search(index).Query(q).Sort("@timestamp", false).Size(count).Do()
+	result, err := c.client.Search().Query(q).Sort("@timestamp", false).Size(count).Do()
 	if err != nil {
 		return sources, err
 	}
