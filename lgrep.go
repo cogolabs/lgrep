@@ -93,6 +93,14 @@ func (l LGrep) NewSearch() (search *elastic.SearchService, dbg func(wr io.Writer
 
 // FormatSources templates sources into strings for output
 func (l LGrep) FormatSources(sources []*json.RawMessage, format string) (msgs []string, err error) {
+	// If its raw, cleanup the json and then spit that out
+	if IsRawFormat(format) {
+		for _, s := range sources {
+			msgs = append(msgs, string(bytes.TrimSpace(*s)))
+		}
+		return msgs, nil
+	}
+
 	format = CurlyFormat(format)
 	tmpl, err := template.New("format").Option("missingkey=zero").Parse(format)
 	if err != nil {
@@ -114,4 +122,9 @@ func (l LGrep) FormatSources(sources []*json.RawMessage, format string) (msgs []
 		msgs = append(msgs, string(bytes.TrimSpace(buf.Bytes())))
 	}
 	return msgs, nil
+}
+
+func rawSources(sources []*json.RawMessage) (out []string) {
+
+	return out
 }

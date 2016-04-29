@@ -12,6 +12,8 @@ var (
 	closeBrace = []byte{'}', '}'}
 )
 
+// CurlyFormat turns a simple jq-like format string into a proper
+// text/template parsable format (.field1 => {{.field1}})
 func CurlyFormat(str string) (formattable string) {
 
 	if strings.Contains(str, "{{") && strings.Contains(str, "}}") {
@@ -53,4 +55,15 @@ func CurlyFormat(str string) (formattable string) {
 	}
 
 	return dst.String()
+}
+
+// IsRawFormat determines if the specified format string is asking for
+// a raw JSON output string.
+func IsRawFormat(str string) bool {
+	if str == "." || str == "{{.}}" {
+		return true
+	}
+	// If the string AT ALL contains the raw output token then the
+	// predicate will indicate that its really a raw format string.
+	return strings.Contains(str, "{{.}}")
 }

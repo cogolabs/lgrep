@@ -75,7 +75,7 @@ func main() {
 		out = tw
 	}
 
-	msgs, err := lg.FormatSources(docs, lgrep.CurlyFormat(format))
+	msgs, err := lg.FormatSources(docs, format)
 	for _, m := range msgs {
 		fmt.Fprintln(out, m)
 	}
