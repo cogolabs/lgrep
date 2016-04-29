@@ -2,9 +2,14 @@ package lgrep
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"strings"
+	"text/template"
 	"unicode"
+
+	log "github.com/Sirupsen/logrus"
+	"github.com/juju/errors"
 )
 
 var (
@@ -15,7 +20,6 @@ var (
 // CurlyFormat turns a simple jq-like format string into a proper
 // text/template parsable format (.field1 => {{.field1}})
 func CurlyFormat(str string) (formattable string) {
-
 	if strings.Contains(str, "{{") && strings.Contains(str, "}}") {
 		return str
 	}
@@ -66,4 +70,38 @@ func IsRawFormat(str string) bool {
 	// If the string AT ALL contains the raw output token then the
 	// predicate will indicate that its really a raw format string.
 	return strings.Contains(str, "{{.}}")
+}
+
+// FormatSources templates sources into strings for output
+func FormatSources(sources []*json.RawMessage, format string) (msgs []string, err error) {
+	// If its raw, cleanup the json and then spit that out
+	if IsRawFormat(format) {
+		for _, s := range sources {
+			msgs = append(msgs, string(bytes.TrimSpace(*s)))
+		}
+		return msgs, nil
+	}
+
+	format = CurlyFormat(format)
+	log.Debugf("Using template format: '%s'", format)
+	tmpl, err := template.New("format").Option("missingkey=zero").Parse(format)
+	if err != nil {
+		return msgs, errors.Annotate(err, "Format template invalid")
+	}
+	for i := range sources {
+		var data map[string]interface{}
+		err = json.Unmarshal(*sources[i], &data)
+		if err != nil {
+			log.Error(errors.Annotate(err, "Error unmarshalling source"))
+			continue
+		}
+		var buf bytes.Buffer
+		err = tmpl.Execute(&buf, data)
+		if err != nil {
+			log.Error(errors.Annotate(err, "Error templating source"))
+			continue
+		}
+		msgs = append(msgs, string(bytes.TrimSpace(buf.Bytes())))
+	}
+	return msgs, nil
 }

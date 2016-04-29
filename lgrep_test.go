@@ -7,11 +7,11 @@ import (
 var TEST_ENDPOINT = "http://localhost:9200"
 
 func TestSearch(t *testing.T) {
-	l, err := NewLGrep(TEST_ENDPOINT)
+	l, err := New(TEST_ENDPOINT)
 	if err != nil {
 		t.Fatalf("Client error: %s", err)
 	}
-	docs, err := l.SimpleSearch("*", 10)
+	docs, err := l.SimpleSearch("*", "", 10)
 	if err != nil {
 		t.Fatalf("Error running search: %s", err)
 	}
@@ -22,22 +22,22 @@ func TestSearch(t *testing.T) {
 
 func TestSearchFormat(t *testing.T) {
 	expected := "network"
-	l, err := NewLGrep(TEST_ENDPOINT)
+	l, err := New(TEST_ENDPOINT)
 	if err != nil {
 		t.Fatalf("Client error: %s", err)
 	}
-	docs, err := l.SimpleSearch("type:"+expected, 1)
+	docs, err := l.SimpleSearch("type:"+expected, "", 1)
 	if err != nil {
 		t.Fatalf("Error running search: %s", err)
 	}
 	if len(docs) != 1 {
 		t.Fatalf("Search should have retrieved 10 docs as specified")
 	}
-	msgs1, err := l.FormatSources(docs, "{{.type}}")
+	msgs1, err := FormatSources(docs, "{{.type}}")
 	if err != nil {
 		t.Fatal(err)
 	}
-	msgs2, err := l.FormatSources(docs, ".type")
+	msgs2, err := FormatSources(docs, ".type")
 	if err != nil {
 		t.Fatal(err)
 	}

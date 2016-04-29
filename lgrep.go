@@ -1,12 +1,10 @@
 package lgrep
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"text/template"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -29,7 +27,7 @@ type LGrep struct {
 }
 
 // NewLGrep client
-func NewLGrep(endpoint string) (lg LGrep, err error) {
+func New(endpoint string) (lg LGrep, err error) {
 	lg = LGrep{Endpoint: endpoint}
 	lg.Client, err = elastic.NewClient(elastic.SetURL(endpoint))
 	return lg, err
@@ -59,7 +57,7 @@ func (l LGrep) SimpleSearch(q string, index string, count int) (docs []*json.Raw
 	if count == 0 {
 		return docs, nil
 	}
-
+	log.Debug("Submitting search request..")
 	res, err := search.Do()
 	if err != nil {
 		return docs, errors.Annotatef(err, "Search returned with error")
@@ -93,37 +91,4 @@ func (l LGrep) NewSearch() (search *elastic.SearchService, dbg func(wr io.Writer
 		}
 	}
 	return search, dbg
-}
-
-// FormatSources templates sources into strings for output
-func (l LGrep) FormatSources(sources []*json.RawMessage, format string) (msgs []string, err error) {
-	// If its raw, cleanup the json and then spit that out
-	if IsRawFormat(format) {
-		for _, s := range sources {
-			msgs = append(msgs, string(bytes.TrimSpace(*s)))
-		}
-		return msgs, nil
-	}
-
-	format = CurlyFormat(format)
-	tmpl, err := template.New("format").Option("missingkey=zero").Parse(format)
-	if err != nil {
-		return msgs, errors.Annotate(err, "Format template invalid")
-	}
-	for i := range sources {
-		var data map[string]interface{}
-		err = json.Unmarshal(*sources[i], &data)
-		if err != nil {
-			log.Error(errors.Annotate(err, "Error unmarshalling source"))
-			continue
-		}
-		var buf bytes.Buffer
-		err = tmpl.Execute(&buf, data)
-		if err != nil {
-			log.Error(errors.Annotate(err, "Error templating source"))
-			continue
-		}
-		msgs = append(msgs, string(bytes.TrimSpace(buf.Bytes())))
-	}
-	return msgs, nil
 }

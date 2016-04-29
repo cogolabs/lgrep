@@ -13,9 +13,11 @@ import (
 )
 
 const (
-	DefaultFormat        = ".message"
+	// DefaultFormat provides a sane default to use in the case that the
+	// user does not provide a format.
+	DefaultFormat = ".message"
+	// DefaultVerboseFormat provides a more verbose default format.
 	DefaultVerboseFormat = ".host .service .message"
-	RawFormat            = "."
 )
 
 var (
@@ -56,7 +58,7 @@ func main() {
 	out = os.Stdout
 
 	q := strings.Join(flag.Args(), " ")
-	lg, err := lgrep.NewLGrep(*flagEndpoint)
+	lg, err := lgrep.New(*flagEndpoint)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -79,7 +81,7 @@ func main() {
 		out = tw
 	}
 
-	msgs, err := lg.FormatSources(docs, format)
+	msgs, err := lgrep.FormatSources(docs, format)
 	for _, m := range msgs {
 		fmt.Fprintln(out, m)
 	}
