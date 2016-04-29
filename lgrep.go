@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"text/template"
 	"time"
@@ -13,6 +14,11 @@ import (
 	"gopkg.in/olivere/elastic.v3"
 )
 
+var (
+	ErrEmptySearch = errors.New("Empty search query, not submitting.")
+)
+
+// LGrep holds state and configuration for running queries against the
 type LGrep struct {
 	// Client is the backing interface that searches elasticsearch
 	*elastic.Client
@@ -23,7 +29,7 @@ type LGrep struct {
 
 // NewLGrep client
 func NewLGrep(endpoint string) (lg LGrep, err error) {
-	lg = LGrep{}
+	lg = LGrep{Endpoint: endpoint}
 	lg.Client, err = elastic.NewClient(elastic.SetURL(endpoint))
 	return lg, err
 }
@@ -31,20 +37,16 @@ func NewLGrep(endpoint string) (lg LGrep, err error) {
 // SimpleSearch returns the last `count` occurrences of the matching
 // search in descending newness.
 func (l LGrep) SimpleSearch(q string, count int) (docs []*json.RawMessage, err error) {
+	if q == "" {
+		return docs, ErrEmptySearch
+	}
 	docs = make([]*json.RawMessage, 0)
-	source := elastic.NewSearchSource()
-	search := SearchWithLucene(l.Client.Search().SearchSource(source), q).Size(count)
+	search, qDebug := l.NewSearch()
+	search = SearchWithLucene(search, q).Size(count)
 	search = SortByTimestamp(search, SortDesc)
 
-	// Debug the query that's produced by the search parameters
 	if l.Debug {
-		queryMap, err := source.Source()
-		if err == nil {
-			queryJSON, err := json.MarshalIndent(queryMap, "> ", "  ")
-			if err == nil {
-				fmt.Fprintf(os.Stderr, "> %s\n", queryJSON)
-			}
-		}
+		qDebug(os.Stderr)
 	}
 
 	res, err := search.Do()
@@ -63,27 +65,28 @@ func (l LGrep) SearchTimerange(search string, count int, t1 time.Time, t2 time.T
 
 }
 
-// func (l LGrep) FormatMessages(sources []*json.RawMessage) (msgs []string, err error) {
-// 	errCount := 0
-// 	type message struct {
-// 		Message string `json:"message"`
-// 	}
-// 	for mid := range sources {
-// 		var m message
-// 		marshallErr := json.Unmarshal(*sources[mid], &m)
-// 		if marshallErr != nil {
-// 			errCount++
-// 			continue
-// 		}
-// 		msgs = append(msgs, m.Message)
-// 	}
-// 	if errCount > 0 {
-// 		err = fmt.Errorf("%d errors occurred during json parsing of source", errCount)
-// 	}
-// 	return msgs, err
-// }
+// NewSearch initializes a new search object along with a func to
+// debug the resulting query to be sent.
+func (l LGrep) NewSearch() (search *elastic.SearchService, dbg func(wr io.Writer)) {
+	source := elastic.NewSearchSource()
+	search = l.Client.Search().SearchSource(source)
 
+	// Debug the query that's produced by the search parameters
+	dbg = func(wr io.Writer) {
+		queryMap, err := source.Source()
+		if err == nil {
+			queryJSON, err := json.MarshalIndent(queryMap, "> ", "  ")
+			if err == nil {
+				fmt.Fprintf(wr, "> %s\n", queryJSON)
+			}
+		}
+	}
+	return search, dbg
+}
+
+// FormatSources templates sources into strings for output
 func (l LGrep) FormatSources(sources []*json.RawMessage, format string) (msgs []string, err error) {
+
 	tmpl, err := template.New("format").Option("missingkey=zero").Parse(format)
 	if err != nil {
 		return msgs, errors.Annotate(err, "Format template invalid")
@@ -101,7 +104,7 @@ func (l LGrep) FormatSources(sources []*json.RawMessage, format string) (msgs []
 			log.Error(errors.Annotate(err, "Error templating source"))
 			continue
 		}
-		msgs = append(msgs, buf.String())
+		msgs = append(msgs, string(bytes.TrimSpace(buf.Bytes())))
 	}
 	return msgs, nil
 }

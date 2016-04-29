@@ -21,7 +21,7 @@ import (
 
 const (
 	// Version is the current version of Elastic.
-	Version = "3.0.30"
+	Version = "3.0.34"
 
 	// DefaultUrl is the default endpoint of Elasticsearch on the local machine.
 	// It is used e.g. when initializing a new Client without a specific URL.
@@ -678,18 +678,20 @@ func (c *Client) dumpResponse(resp *http.Response) {
 
 // sniffer periodically runs sniff.
 func (c *Client) sniffer() {
-	for {
-		c.mu.RLock()
-		timeout := c.snifferTimeout
-		ticker := time.After(c.snifferInterval)
-		c.mu.RUnlock()
+	c.mu.RLock()
+	timeout := c.snifferTimeout
+	c.mu.RUnlock()
 
+	ticker := time.NewTicker(timeout)
+	defer ticker.Stop()
+
+	for {
 		select {
 		case <-c.snifferStop:
 			// we are asked to stop, so we signal back that we're stopping now
 			c.snifferStop <- true
 			return
-		case <-ticker:
+		case <-ticker.C:
 			c.sniff(timeout)
 		}
 	}
@@ -865,18 +867,20 @@ func (c *Client) updateConns(conns []*conn) {
 
 // healthchecker periodically runs healthcheck.
 func (c *Client) healthchecker() {
-	for {
-		c.mu.RLock()
-		timeout := c.healthcheckTimeout
-		ticker := time.After(c.healthcheckInterval)
-		c.mu.RUnlock()
+	c.mu.RLock()
+	timeout := c.healthcheckTimeout
+	c.mu.RUnlock()
 
+	ticker := time.NewTicker(timeout)
+	defer ticker.Stop()
+
+	for {
 		select {
 		case <-c.healthcheckStop:
 			// we are asked to stop, so we signal back that we're stopping now
 			c.healthcheckStop <- true
 			return
-		case <-ticker:
+		case <-ticker.C:
 			c.healthcheck(timeout, false)
 		}
 	}

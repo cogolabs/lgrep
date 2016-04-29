@@ -1,14 +1,38 @@
 {
 	"ImportPath": "github.com/cogolabs/lgrep",
 	"GoVersion": "go1.6",
+	"GodepVersion": "v62",
 	"Packages": [
 		"."
 	],
 	"Deps": [
 		{
+			"ImportPath": "github.com/Sirupsen/logrus",
+			"Comment": "v0.10.0-16-gcd7d1bb",
+			"Rev": "cd7d1bbe41066b6c1f19780f895901052150a575"
+		},
+		{
+			"ImportPath": "github.com/juju/errors",
+			"Rev": "1b5e39b83d1835fa480e0c2ddefb040ee82d58b3"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "c8bc69bc2db9c57ccf979550bc69655df5039a8a"
+		},
+		{
 			"ImportPath": "gopkg.in/olivere/elastic.v3",
-			"Comment": "v3.0.30",
-			"Rev": "bff1355ba593686c7bfc1abb7a8573f34a9c29d1"
+			"Comment": "v3.0.34",
+			"Rev": "9ccf48af2c7c0a61ce157876b2be9287679d261b"
+		},
+		{
+			"ImportPath": "gopkg.in/olivere/elastic.v3/backoff",
+			"Comment": "v3.0.34",
+			"Rev": "9ccf48af2c7c0a61ce157876b2be9287679d261b"
+		},
+		{
+			"ImportPath": "gopkg.in/olivere/elastic.v3/uritemplates",
+			"Comment": "v3.0.34",
+			"Rev": "9ccf48af2c7c0a61ce157876b2be9287679d261b"
 		}
 	]
 }
