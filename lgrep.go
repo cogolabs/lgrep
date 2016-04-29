@@ -45,8 +45,15 @@ func (l LGrep) SimpleSearch(q string, count int) (docs []*json.RawMessage, err e
 	search = SearchWithLucene(search, q).Size(count)
 	search = SortByTimestamp(search, SortDesc)
 
+	// Spit out the query that will be sent.
 	if l.Debug {
 		qDebug(os.Stderr)
+	}
+
+	// If user wants 0 then they're really not looking to get any
+	// results, don't execute.
+	if count == 0 {
+		return docs, nil
 	}
 
 	res, err := search.Do()
@@ -86,7 +93,7 @@ func (l LGrep) NewSearch() (search *elastic.SearchService, dbg func(wr io.Writer
 
 // FormatSources templates sources into strings for output
 func (l LGrep) FormatSources(sources []*json.RawMessage, format string) (msgs []string, err error) {
-
+	format = CurlyFormat(format)
 	tmpl, err := template.New("format").Option("missingkey=zero").Parse(format)
 	if err != nil {
 		return msgs, errors.Annotate(err, "Format template invalid")

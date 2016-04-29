@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	DefaultFormat        = "{{.message}}"
-	DefaultVerboseFormat = "{{.host}} {{.service}} {{.message}}"
+	DefaultFormat        = ".message"
+	DefaultVerboseFormat = ".host .service .message"
+	RawFormat            = "."
 )
 
 var (
@@ -74,7 +75,7 @@ func main() {
 		out = tw
 	}
 
-	msgs, err := lg.FormatSources(docs, format)
+	msgs, err := lg.FormatSources(docs, lgrep.CurlyFormat(format))
 	for _, m := range msgs {
 		fmt.Fprintln(out, m)
 	}
