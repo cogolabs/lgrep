@@ -10,6 +10,9 @@ func TestCurlyFormat(t *testing.T) {
 		{".one .two", "{{.one}} {{.two}}"},
 		{".one {{.two}}", ".one {{.two}}"},
 		{".one . .two", "{{.one}} {{.}} {{.two}}"},
+		{".one-one", "{{.one-one}}"},
+		{".@timestamp", "{{.@timestamp}}"},
+		{`."@timestamp"`, `{{."@timestamp"}}`},
 	}
 
 	for _, ex := range examples {

@@ -15,6 +15,7 @@ import (
 )
 
 var (
+	// ErrEmptySearch is returned when an empty query is given.
 	ErrEmptySearch = errors.New("Empty search query, not submitting.")
 )
 
@@ -36,7 +37,7 @@ func NewLGrep(endpoint string) (lg LGrep, err error) {
 
 // SimpleSearch returns the last `count` occurrences of the matching
 // search in descending newness.
-func (l LGrep) SimpleSearch(q string, count int) (docs []*json.RawMessage, err error) {
+func (l LGrep) SimpleSearch(q string, index string, count int) (docs []*json.RawMessage, err error) {
 	if q == "" {
 		return docs, ErrEmptySearch
 	}
@@ -44,6 +45,9 @@ func (l LGrep) SimpleSearch(q string, count int) (docs []*json.RawMessage, err e
 	search, qDebug := l.NewSearch()
 	search = SearchWithLucene(search, q).Size(count)
 	search = SortByTimestamp(search, SortDesc)
+	if index != "" {
+		search.Index(index)
+	}
 
 	// Spit out the query that will be sent.
 	if l.Debug {
@@ -122,9 +126,4 @@ func (l LGrep) FormatSources(sources []*json.RawMessage, format string) (msgs []
 		msgs = append(msgs, string(bytes.TrimSpace(buf.Bytes())))
 	}
 	return msgs, nil
-}
-
-func rawSources(sources []*json.RawMessage) (out []string) {
-
-	return out
 }
