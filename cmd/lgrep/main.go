@@ -55,7 +55,7 @@ func init() {
 	flag.Usage = usage
 	flag.Parse()
 	log.SetOutput(os.Stderr)
-	log.SetLevel(log.ErrorLevel)
+	log.SetLevel(log.WarnLevel)
 
 	if *flagDebug {
 		log.SetLevel(log.DebugLevel)
@@ -94,6 +94,10 @@ func main() {
 	msgs, err := lgrep.FormatSources(docs, format)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if len(msgs) == 0 {
+		log.Warn("Query returned zero results")
+		os.Exit(1)
 	}
 	for _, m := range msgs {
 		fmt.Fprintln(out, m)
