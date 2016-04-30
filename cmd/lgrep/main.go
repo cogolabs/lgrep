@@ -82,6 +82,9 @@ func main() {
 	}
 
 	msgs, err := lgrep.FormatSources(docs, format)
+	if err != nil {
+		log.Fatal(err)
+	}
 	for _, m := range msgs {
 		fmt.Fprintln(out, m)
 	}

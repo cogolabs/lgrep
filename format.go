@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"text/template"
+	"time"
 	"unicode"
 
 	log "github.com/Sirupsen/logrus"
@@ -84,17 +85,29 @@ func FormatSources(sources []*json.RawMessage, format string) (msgs []string, er
 
 	format = CurlyFormat(format)
 	log.Debugf("Using template format: '%s'", format)
-	tmpl, err := template.New("format").Option("missingkey=zero").Parse(format)
+	tmpl, err := template.New("format").
+		Option("missingkey=zero").Funcs(template.FuncMap{
+		// format time - not eff-time, its invulnerable.
+		"ftime": strftime,
+	}).Parse(format)
 	if err != nil {
 		return msgs, errors.Annotate(err, "Format template invalid")
 	}
+	log.Debugf("Formatting %d sources", len(sources))
 	for i := range sources {
-		var data map[string]interface{}
+		data := make(map[string]interface{})
+		var ts time.Time
+
+		data["date"] = ts
+		data["@timestamp"] = ts
+
 		err = json.Unmarshal(*sources[i], &data)
 		if err != nil {
 			log.Error(errors.Annotate(err, "Error unmarshalling source"))
 			continue
 		}
+		normalizeTS(data)
+
 		var buf bytes.Buffer
 		err = tmpl.Execute(&buf, data)
 		if err != nil {
@@ -104,4 +117,42 @@ func FormatSources(sources []*json.RawMessage, format string) (msgs []string, er
 		msgs = append(msgs, string(bytes.TrimSpace(buf.Bytes())))
 	}
 	return msgs, nil
+}
+
+// Some index used date and others the @timestamp field for the ts
+func normalizeTS(data map[string]interface{}) map[string]interface{} {
+	var lastT string
+
+	if t, ok := data["@timestamp"]; ok {
+		lastT = t.(string)
+		s, err := time.Parse(time.RFC3339, lastT)
+		if err == nil {
+			data["timestamp"] = s
+			return data
+		}
+	}
+
+	if t, ok := data["date"]; ok {
+		lastT = t.(string)
+		s, err := time.Parse(time.RFC3339, lastT)
+		if err == nil {
+			data["timestamp"] = s
+			return data
+		}
+	}
+	data["timestamp"] = lastT
+	return data
+}
+
+func strftime(format string, d interface{}) string {
+	var t time.Time
+	switch v := d.(type) {
+	case time.Time:
+		t = v
+	case string:
+		return v
+	default:
+		v, _ = time.Parse("2006-01-02 15:04", "1955-11-05 06:00")
+	}
+	return t.Format(format)
 }
