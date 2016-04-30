@@ -151,8 +151,8 @@ func strftime(format string, d interface{}) string {
 		t = v
 	case string:
 		return v
-	default:
-		v, _ = time.Parse("2006-01-02 15:04", "1955-11-05 06:00")
+	case bool:
+		t, _ = time.Parse("2006-01-02 15:04", "1955-11-05 06:00")
 	}
 	return t.Format(format)
 }
