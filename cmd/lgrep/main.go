@@ -1,12 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
+	"io/ioutil"
+	"net/url"
 	"os"
 	"strings"
-	"text/tabwriter"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
@@ -67,6 +68,10 @@ var (
 			Value: DefaultFormat,
 		},
 		cli.BoolFlag{
+			Name:  "raw-json, j",
+			Usage: "Output the raw json _source of the results (1 line per result)",
+		},
+		cli.BoolFlag{
 			Name:  "stdline, ff",
 			Usage: "Format lines with common format '" + StdlineFormat + "'.",
 		},
@@ -86,6 +91,10 @@ var (
 		cli.StringFlag{
 			Name:  "query-fields, Qc",
 			Usage: "Fields to be retrieved (ex: field1,field2)",
+		},
+		cli.StringFlag{
+			Name:  "query-file, Qf",
+			Usage: "Raw elasticsearch json query to submit",
 		},
 	}
 )
@@ -127,6 +136,12 @@ func RunPrepareApp(c *cli.Context) (err error) {
 	// query might have been provided via a file or another flag
 	var queryProvided bool
 
+	if endpoint := c.String("endpoint"); endpoint == "" {
+		return cli.NewExitError("Endpoint must be set", 1)
+	} else if _, err := url.Parse(endpoint); err != nil {
+		return cli.NewExitError("Endpoint must be a url (ex: http://localhost:9200/)", 1)
+	}
+
 	// Set the format to the stdline format if asked, and warn when
 	// they're both set.
 	if c.Bool("stdline") {
@@ -140,6 +155,18 @@ func RunPrepareApp(c *cli.Context) (err error) {
 		log.SetLevel(log.DebugLevel)
 	}
 
+	if c.IsSet("query-file") {
+		if _, err := os.Stat(c.String("query-file")); err != nil {
+			return cli.NewExitError("Query file provided cannot be read", 3)
+		}
+		queryProvided = true
+	}
+
+	// Can't provide both a query via a file and via lucene search via
+	// args.
+	if len(c.Args()) > 0 && queryProvided {
+		return cli.NewExitError("You've provided multiple queries (file and lucene perhaps?)", 3)
+	}
 	if len(c.Args()) == 0 && !queryProvided {
 		return cli.NewExitError("No query provided", 3)
 	}
@@ -148,60 +175,79 @@ func RunPrepareApp(c *cli.Context) (err error) {
 }
 
 func RunQuery(c *cli.Context) (err error) {
-	return err
-}
+	var (
+		endpoint    = c.String("endpoint")
+		queryFile   = c.String("query-file")
+		querySize   = c.Int("count")
+		queryIndex  = c.String("query-index")
+		queryDebug  = c.Bool("query-debug")
+		queryFields = strings.Split(c.String("query-fields"), ",")
+		query       = strings.Join(c.Args(), " ")
 
-func init() {
-	// flag.Usage = usage
-	// flag.Parse()
-	// log.SetOutput(os.Stderr)
-	// log.SetLevel(log.WarnLevel)
+		format    = c.String("format")
+		formatRaw = c.Bool("raw-json")
 
-	// if *flagDebug {
-	// 	log.SetLevel(log.DebugLevel)
-	// 	*flagQueryDebug = true
-	// }
+		// Results from the executed search
+		results []*json.RawMessage
+	)
+
+	l, err := lgrep.New(endpoint)
+	if err != nil {
+		return err
+	}
+
+	l.Debug = queryDebug
+
+	if c.IsSet("query-file") {
+		var (
+			f *os.File
+			d []byte
+		)
+		f, err = os.Open(queryFile)
+		if err != nil {
+			return errors.Annotate(err, "Could not open the provided query file")
+		}
+		d, err = ioutil.ReadAll(f)
+		if err != nil {
+			return errors.Annotate(err, "Could not read the provided query file")
+		}
+		results, err = l.SearchWithSource(d)
+	}
+
+	if query != "" {
+		results, err = l.SimpleSearch(query, queryIndex, querySize)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if len(results) == 0 {
+		log.Warn("0 results returned")
+		return
+	}
+
+	if formatRaw {
+		if len(queryFields) > 0 {
+			log.Error("Field selection and raw output is unsupported at this time")
+			return nil
+		}
+		for i := range results {
+			fmt.Printf("%s\n", results[i])
+		}
+		return
+	}
+
+	msgs, err := lgrep.Format(results, format)
+	if err != nil {
+		return err
+	}
+	for i := range msgs {
+		fmt.Println(msgs[i])
+	}
+	return nil
 }
 
 func main() {
 	App().Run(os.Args)
-	return
-	var out io.Writer
-	out = os.Stdout
-
-	q := strings.Join(flag.Args(), " ")
-	lg, err := lgrep.New(*flagEndpoint)
-	if err != nil {
-		log.Fatal(err)
-	}
-	lg.Debug = *flagQueryDebug
-	docs, err := lg.SimpleSearch(q, *flagQueryIndex, *flagResultCount)
-	if err != nil {
-		log.Fatal(err)
-	}
-	format := *flagResultFormat
-	if *flagResultVerboseFormat && format == DefaultFormat {
-		format = StdlineFormat
-	}
-
-	if *flagResultTabulate {
-		if format == DefaultFormat || format == StdlineFormat {
-			format = strings.Replace(format, " ", "\t", -1)
-		}
-		tw := tabwriter.NewWriter(out, 5, 2, 2, ' ', 0)
-		defer func() { tw.Flush() }()
-		out = tw
-	}
-
-	msgs, err := lgrep.FormatSources(docs, format)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if len(msgs) == 0 {
-		log.Warn("Query returned zero results")
-		os.Exit(1)
-	}
-	for _, m := range msgs {
-		fmt.Fprintln(out, m)
-	}
 }

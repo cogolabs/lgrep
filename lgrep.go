@@ -40,7 +40,7 @@ func (l LGrep) SimpleSearch(q string, index string, count int) (docs []*json.Raw
 		return docs, ErrEmptySearch
 	}
 	docs = make([]*json.RawMessage, 0)
-	search, qDebug := l.NewSearch()
+	search, dbg := l.NewSearch()
 	search = SearchWithLucene(search, q).Size(count)
 	search = SortByTimestamp(search, SortDesc)
 	if index != "" {
@@ -49,7 +49,7 @@ func (l LGrep) SimpleSearch(q string, index string, count int) (docs []*json.Raw
 
 	// Spit out the query that will be sent.
 	if l.Debug {
-		qDebug(os.Stderr)
+		dbg(os.Stderr)
 	}
 
 	// If user wants 0 then they're really not looking to get any
@@ -57,6 +57,27 @@ func (l LGrep) SimpleSearch(q string, index string, count int) (docs []*json.Raw
 	if count == 0 {
 		return docs, nil
 	}
+	log.Debug("Submitting search request..")
+	res, err := search.Do()
+	if err != nil {
+		return docs, errors.Annotatef(err, "Search returned with error")
+	}
+	for _, doc := range res.Hits.Hits {
+		docs = append(docs, doc.Source)
+	}
+	return docs, nil
+}
+
+func (l LGrep) SearchWithSource(source interface{}) (docs []*json.RawMessage, err error) {
+	docs = make([]*json.RawMessage, 0)
+
+	search, dbg := l.NewSearch()
+	search.Source(source)
+
+	if l.Debug {
+		dbg(os.Stderr)
+	}
+
 	log.Debug("Submitting search request..")
 	res, err := search.Do()
 	if err != nil {
