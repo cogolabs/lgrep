@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -42,11 +43,6 @@ var (
 
 	// QueryFlags apply to runs that query with lgrep
 	QueryFlags = []cli.Flag{
-		cli.IntFlag{
-			Name:  "size, n",
-			Usage: "Number of results to be returned",
-			Value: 100,
-		},
 		cli.StringFlag{
 			Name:  "format, f",
 			Usage: "Simple formatting using text/template (go stdlib)",
@@ -63,6 +59,11 @@ var (
 		cli.BoolFlag{
 			Name:  "tabulate, T",
 			Usage: "Tabulate the data into columns",
+		},
+		cli.IntFlag{
+			Name:  "query-size, n, Qn",
+			Usage: "Number of results to be returned",
+			Value: 100,
 		},
 		cli.BoolFlag{
 			Name:   "query-debug, QD",
@@ -163,96 +164,130 @@ func RunPrepareApp(c *cli.Context) (err error) {
 	return err
 }
 
-func RunQuery(c *cli.Context) (err error) {
-	var (
-		endpoint    = c.String("endpoint")
-		queryFile   = c.String("query-file")
-		querySize   = c.Int("size")
-		queryIndex  = c.String("query-index")
-		queryDebug  = c.Bool("query-debug")
-		queryFields = []string{}
-		query       = strings.Join(c.Args(), " ")
+// Config represents the configuration for the lgrep run based on the
+// flags provided.
+type Config struct {
+	// General client configuration
+	endpoint string
+	debug    bool
 
-		format         = c.String("format")
-		formatRaw      = c.Bool("raw-json")
-		formatTabulate = c.Bool("tabulate")
+	// Query configuration
+	queryFile   string
+	querySize   int
+	queryIndex  string
+	queryDebug  bool
+	queryFields []string
+	query       string
 
-		// Results from the executed search
-		results []*json.RawMessage
-	)
+	// Formatting configuration
+	formatTemplate string
+	formatRaw      bool
+	formatTabulate bool
+}
 
-	if qf := c.String("query-fields"); qf != "" {
-		queryFields = strings.Split(qf, ",")
-	}
-
-	l, err := lgrep.New(endpoint)
+// Run the user's configured search
+func (c Config) search() (results []*json.RawMessage, err error) {
+	l, err := lgrep.New(c.endpoint)
 	if err != nil {
 		log.Error(err)
-		return err
+		return results, err
 	}
 
-	l.Debug = queryDebug
+	l.Debug = c.queryDebug
 
-	if c.IsSet("query-file") {
+	if c.queryFile != "" {
 		var (
 			f *os.File
 			d []byte
 		)
-		f, err = os.Open(queryFile)
+		f, err = os.Open(c.queryFile)
 		if err != nil {
-			return errors.Annotate(err, "Could not open the provided query file")
+			return results, errors.Annotate(err, "Could not open the provided query file")
 		}
 		d, err = ioutil.ReadAll(f)
 		if err != nil {
-			return errors.Annotate(err, "Could not read the provided query file")
+			return results, errors.Annotate(err, "Could not read the provided query file")
 		}
 		results, err = l.SearchWithSource(d)
 	}
 
-	if query != "" {
-		results, err = l.SimpleSearch(query, queryIndex, querySize)
+	if c.query != "" {
+		results, err = l.SimpleSearch(c.query, c.queryIndex, c.querySize)
 	}
+	fmt.Println(len(results))
 
-	if err != nil {
-		return err
-	}
+	return results, err
+}
 
-	if len(results) == 0 {
-		log.Warn("0 results returned")
-		return
-	}
-
-	if formatRaw {
-		if len(queryFields) != 0 {
+// Format and print the results according to config to the specified
+// out.
+func (c Config) format(results []*json.RawMessage, out io.Writer) error {
+	if c.formatRaw {
+		if len(c.queryFields) != 0 {
 			log.Error("Field selection and raw output is unsupported at this time")
 			return nil
 		}
 		for i := range results {
 			fmt.Printf("%s\n", *results[i])
 		}
-		return
+		return nil
 	}
 
-	var tabbed *tabwriter.Writer
-	if formatTabulate {
-		format = tabifyFormat(format, false)
+	var (
+		tabbed *tabwriter.Writer
+		format = c.formatTemplate
+	)
+	if c.formatTabulate {
+		format = tabifyFormat(c.formatTemplate, false)
 		header := tabifyFormat(format, true)
-		tabbed = tabwriter.NewWriter(os.Stdout, 6, 2, 2, ' ', 0)
+		tabbed = tabwriter.NewWriter(out, 6, 2, 2, ' ', 0)
+		out = tabbed
 		defer tabbed.Flush()
 		fmt.Fprintln(tabbed, header)
 	}
-	msgs, err := lgrep.Format(results, format)
+	msgs, err := lgrep.Format(results, c.formatTemplate)
 	if err != nil {
 		return err
 	}
+
 	for i := range msgs {
-		if formatTabulate {
-			fmt.Fprintln(tabbed, msgs[i])
-		} else {
-			fmt.Println(msgs[i])
-		}
+		fmt.Fprintln(out, msgs[i])
 	}
 	return nil
+}
+
+// RunQuery is the primary action that the lgrep application performs.
+func RunQuery(c *cli.Context) (err error) {
+	run := Config{
+		endpoint: c.String("endpoint"),
+		debug:    c.Bool("debug"),
+
+		queryFile:   c.String("query-file"),
+		querySize:   c.Int("query-size"),
+		queryIndex:  c.String("query-index"),
+		queryDebug:  c.Bool("query-debug"),
+		queryFields: []string{},
+		query:       strings.Join(c.Args(), " "),
+
+		formatTemplate: c.String("format"),
+		formatRaw:      c.Bool("raw-json"),
+		formatTabulate: c.Bool("tabulate"),
+	}
+
+	if qf := c.String("query-fields"); qf != "" {
+		run.queryFields = strings.Split(qf, ",")
+	}
+
+	results, err := run.search()
+	if err != nil {
+		return err
+	}
+
+	if len(results) == 0 {
+		log.Warn("0 results returned")
+		return nil
+	}
+	return run.format(results, os.Stdout)
 }
 
 // tabifyFormat crafts a tabular format from a format string.
