@@ -26,7 +26,7 @@ type LGrep struct {
 	Debug    bool
 }
 
-// NewLGrep client
+// New creates a new lgrep client.
 func New(endpoint string) (lg LGrep, err error) {
 	lg = LGrep{Endpoint: endpoint}
 	lg.Client, err = elastic.NewClient(elastic.SetURL(endpoint))
@@ -68,6 +68,9 @@ func (l LGrep) SimpleSearch(q string, index string, count int) (docs []*json.Raw
 	return docs, nil
 }
 
+// SearchWithSource may be used to provide a pre-contstructed json
+// query body when a query cannot easily be formed with the available
+// methods.
 func (l LGrep) SearchWithSource(source interface{}) (docs []*json.RawMessage, err error) {
 	docs = make([]*json.RawMessage, 0)
 

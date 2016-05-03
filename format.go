@@ -73,7 +73,7 @@ func IsRawFormat(str string) bool {
 	return strings.Contains(str, "{{.}}")
 }
 
-// FormatSources templates sources into strings for output
+// Format templates documents into strings for output
 func Format(sources []*json.RawMessage, format string) (msgs []string, err error) {
 	// If its raw, cleanup the json and then spit that out
 	if IsRawFormat(format) {

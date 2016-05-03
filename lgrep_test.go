@@ -4,10 +4,19 @@ import (
 	"testing"
 )
 
-var TEST_ENDPOINT = "http://localhost:9200"
+func init() {
+	data, err := ioutil.ReadFile(testJSONQueryPath)
+	if err != nil {
+		log.Fatalf("Could not read test query from json file '%s'", testJSONQueryPath)
+	}
+	testJSONQuery = json.RawMessage(data)
+	log.SetLevel(log.DebugLevel)
+}
+
+var TestEndpoint = "http://localhost:9200"
 
 func TestSearch(t *testing.T) {
-	l, err := New(TEST_ENDPOINT)
+	l, err := New(TestEndpoint)
 	if err != nil {
 		t.Fatalf("Client error: %s", err)
 	}
@@ -22,7 +31,7 @@ func TestSearch(t *testing.T) {
 
 func TestSearchFormat(t *testing.T) {
 	expected := "network"
-	l, err := New(TEST_ENDPOINT)
+	l, err := New(TestEndpoint)
 	if err != nil {
 		t.Fatalf("Client error: %s", err)
 	}

@@ -1,13 +1,17 @@
 package main
 
 var (
+	// Version is the current tagged release or relative release
+	// identifier.
 	Version string
-	Commit  string
+	// Commit is the short SHA of the last commit that was made when the
+	// tool was built.
+	Commit string
 )
 
 func init() {
 	if Version == "" {
-		Version = "1.0.0-dev"
+		Version = "1.0.1-dev"
 	}
 	if Commit == "" {
 		Commit = "HEAD"

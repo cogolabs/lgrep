@@ -84,6 +84,7 @@ var (
 	}
 )
 
+// App instaniates the lgrep command line application for running.
 func App() *cli.App {
 	app := cli.NewApp()
 	app.Name = "lgrep"
@@ -253,6 +254,8 @@ func RunQuery(c *cli.Context) (err error) {
 	}
 	return nil
 }
+
+// tabifyFormat crafts a tabular format from a format string.
 func tabifyFormat(format string, stripTokens bool) (str string) {
 	// Format first for consistency in replacements
 	format = lgrep.CurlyFormat(format)
