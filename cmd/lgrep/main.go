@@ -95,6 +95,7 @@ func App() *cli.App {
 	// Set up the application based on flags before handing off to the action
 	app.Before = RunPrepareApp
 	app.Action = RunQuery
+	app.OnUsageError = RunCheckUpdateOnError
 	app.UsageText = "lgrep [options] QUERY"
 	app.Flags = append(app.Flags, GlobalFlags...)
 	app.Flags = append(app.Flags, QueryFlags...)
