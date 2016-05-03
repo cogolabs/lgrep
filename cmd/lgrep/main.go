@@ -39,6 +39,10 @@ var (
 			Name:  "debug, D",
 			Usage: "Debug lgrep run with verbose logging",
 		},
+		cli.BoolFlag{
+			Name:  "check-for-updates, U",
+			Usage: "Check github for a new release",
+		},
 	}
 
 	// QueryFlags apply to runs that query with lgrep
@@ -124,6 +128,19 @@ func dumpFlags(c *cli.Context) (err error) {
 func RunPrepareApp(c *cli.Context) (err error) {
 	// query might have been provided via a file or another flag
 	var queryProvided bool
+
+	if c.Bool("check-for-updates") {
+		update, err := checkForUpdates(Version)
+		if err != nil {
+			return cli.NewExitError("Error during release check, check yourself please", 2)
+		}
+		if update != nil {
+			fmt.Printf("There's an update available! See %s\n", update.URL)
+		} else {
+			fmt.Println("lgrep is up to date")
+		}
+		os.Exit(0)
+	}
 
 	if endpoint := c.String("endpoint"); endpoint == "" {
 		return cli.NewExitError("Endpoint must be set", 1)
