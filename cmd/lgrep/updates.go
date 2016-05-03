@@ -57,7 +57,7 @@ func checkReleases(url string) (rel *githubRelease, err error) {
 	if err != nil {
 		return nil, err
 	}
-	releases := make([]githubRelease, 0)
+	var releases []githubRelease
 	err = json.Unmarshal(data, &releases)
 	if err != nil {
 		return nil, err
@@ -89,7 +89,8 @@ func checkForUpdates(myVersion string) (update *githubRelease, err error) {
 	return nil, nil
 }
 
-// RunCheckUpdate checks for any updates
+// RunCheckUpdateOnError checks for any updates and returns a suggestion to see
+// the help.
 func RunCheckUpdateOnError(c *cli.Context, cmdErr error, isSubcommand bool) (err error) {
 	fmt.Println("An error occurred with your usage, check --help")
 
