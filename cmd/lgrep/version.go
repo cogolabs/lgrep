@@ -11,7 +11,7 @@ var (
 
 func init() {
 	if Version == "" {
-		Version = "1.0.1-dev"
+		Version = "1.0.2-dev"
 	}
 	if Commit == "" {
 		Commit = "HEAD"
