@@ -94,12 +94,6 @@ func App() *cli.App {
 	app.Before = RunPrepareApp
 	app.Action = RunQuery
 	app.UsageText = "lgrep [options] QUERY"
-	app.After = func(c *cli.Context) error {
-		for _, f := range c.GlobalFlagNames() {
-			fmt.Printf("%s = %s\n", f, c.Generic(f))
-		}
-		return nil
-	}
 	app.Flags = append(app.Flags, GlobalFlags...)
 	app.Flags = append(app.Flags, QueryFlags...)
 	app.Usage = `
@@ -113,6 +107,13 @@ given: { "timestamp": "2016-04-29T13:58:59.420Z" }
 {{.timestamp|ftime "2006-01-02 15:04"}} => 2016-04-29 13:58
 `
 	return app
+}
+
+func dumpFlags(c *cli.Context) (err error) {
+	for _, f := range c.GlobalFlagNames() {
+		fmt.Printf("%s = %s\n", f, c.Generic(f))
+	}
+	return nil
 }
 
 // RunPrepareApp sets defaults and verifies the arguments and flags
@@ -138,6 +139,8 @@ func RunPrepareApp(c *cli.Context) (err error) {
 
 	if c.Bool("debug") {
 		log.SetLevel(log.DebugLevel)
+		c.Set("query-debug", "true")
+		dumpFlags(c)
 	}
 
 	if c.IsSet("query-file") {
@@ -163,7 +166,7 @@ func RunQuery(c *cli.Context) (err error) {
 	var (
 		endpoint    = c.String("endpoint")
 		queryFile   = c.String("query-file")
-		querySize   = c.Int("count")
+		querySize   = c.Int("size")
 		queryIndex  = c.String("query-index")
 		queryDebug  = c.Bool("query-debug")
 		queryFields = strings.Split(c.String("query-fields"), ",")
@@ -179,6 +182,7 @@ func RunQuery(c *cli.Context) (err error) {
 
 	l, err := lgrep.New(endpoint)
 	if err != nil {
+		log.Error(err)
 		return err
 	}
 
@@ -250,8 +254,10 @@ func tabifyFormat(format string, stripTokens bool) (str string) {
 	format = lgrep.CurlyFormat(format)
 
 	// Turn any number of spaces into tabs.
-	spacerTab := regexp.MustCompile(`\s+(?!$)`)
+	spacerTab := regexp.MustCompile(`\s+`)
 	str = spacerTab.ReplaceAllString(format, "\t")
+	str = strings.TrimSpace(str)
+
 	if !stripTokens {
 		return str
 	}
