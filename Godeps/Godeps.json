@@ -3,21 +3,22 @@
 	"GoVersion": "go1.6",
 	"GodepVersion": "v62",
 	"Packages": [
-		"."
+		"./..."
 	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
-			"Comment": "v0.10.0-16-gcd7d1bb",
-			"Rev": "cd7d1bbe41066b6c1f19780f895901052150a575"
+			"Comment": "v0.6.2-10-g51fe59a",
+			"Rev": "51fe59aca108dc5680109e7b2051cbdcfa5a253c"
+		},
+		{
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "v1.16.0-13-g839f07b",
+			"Rev": "839f07bfe4819fa1434fa907d0804ce6ec45a5df"
 		},
 		{
 			"ImportPath": "github.com/juju/errors",
 			"Rev": "1b5e39b83d1835fa480e0c2ddefb040ee82d58b3"
-		},
-		{
-			"ImportPath": "golang.org/x/sys/unix",
-			"Rev": "c8bc69bc2db9c57ccf979550bc69655df5039a8a"
 		},
 		{
 			"ImportPath": "gopkg.in/olivere/elastic.v3",
