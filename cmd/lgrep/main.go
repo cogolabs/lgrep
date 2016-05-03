@@ -169,7 +169,7 @@ func RunQuery(c *cli.Context) (err error) {
 		querySize   = c.Int("size")
 		queryIndex  = c.String("query-index")
 		queryDebug  = c.Bool("query-debug")
-		queryFields = strings.Split(c.String("query-fields"), ",")
+		queryFields = []string{}
 		query       = strings.Join(c.Args(), " ")
 
 		format         = c.String("format")
@@ -179,6 +179,10 @@ func RunQuery(c *cli.Context) (err error) {
 		// Results from the executed search
 		results []*json.RawMessage
 	)
+
+	if qf := c.String("query-fields"); qf != "" {
+		queryFields = strings.Split(qf, ",")
+	}
 
 	l, err := lgrep.New(endpoint)
 	if err != nil {
@@ -218,12 +222,12 @@ func RunQuery(c *cli.Context) (err error) {
 	}
 
 	if formatRaw {
-		if len(queryFields) > 0 {
+		if len(queryFields) != 0 {
 			log.Error("Field selection and raw output is unsupported at this time")
 			return nil
 		}
 		for i := range results {
-			fmt.Printf("%s\n", results[i])
+			fmt.Printf("%s\n", *results[i])
 		}
 		return
 	}
