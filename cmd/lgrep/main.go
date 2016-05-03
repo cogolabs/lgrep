@@ -2,12 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
+	"text/tabwriter"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
@@ -21,22 +22,6 @@ const (
 	DefaultFormat = ".message"
 	// StdlineFormat provides a common usable format
 	StdlineFormat = ".host .service .message"
-)
-
-var (
-	flagEndpoint = flag.String("e", "http://localhost:9200/", "Elasticsearch endpoint")
-	flagDebug    = flag.Bool("D", false, "Debug lgrep")
-
-	flagQueryIndex = flag.String("Qi", "", "Index to search")
-	flagQueryDebug = flag.Bool("QD", false, "Debug the query sent to elasticsearch")
-	//flagQuerySort  = flag.String("Qs", "timestamp:desc", "Sort by <field>:<asc|desc> (appended when specified)")
-	//flagQueryRegex = flag.String("Qr", "message:^.*$", "Add a regex query to the search (AND'd)")
-
-	flagResultCount         = flag.Int("n", 100, "Number of results to fetch")
-	flagResultFormat        = flag.String("f", DefaultFormat, "Format returned results into text/template format")
-	flagResultVerboseFormat = flag.Bool("vf", false, "Use a default verbose format")
-	flagResultFields        = flag.String("c", "", "Fields to return, causes results to be rendered as json")
-	flagResultTabulate      = flag.Bool("T", false, "Write out as tabulated data")
 )
 
 var (
@@ -184,8 +169,9 @@ func RunQuery(c *cli.Context) (err error) {
 		queryFields = strings.Split(c.String("query-fields"), ",")
 		query       = strings.Join(c.Args(), " ")
 
-		format    = c.String("format")
-		formatRaw = c.Bool("raw-json")
+		format         = c.String("format")
+		formatRaw      = c.Bool("raw-json")
+		formatTabulate = c.Bool("tabulate")
 
 		// Results from the executed search
 		results []*json.RawMessage
@@ -238,14 +224,42 @@ func RunQuery(c *cli.Context) (err error) {
 		return
 	}
 
+	var tabbed *tabwriter.Writer
+	if formatTabulate {
+		format = tabifyFormat(format, false)
+		header := tabifyFormat(format, true)
+		tabbed = tabwriter.NewWriter(os.Stdout, 6, 2, 2, ' ', 0)
+		defer tabbed.Flush()
+		fmt.Fprintln(tabbed, header)
+	}
 	msgs, err := lgrep.Format(results, format)
 	if err != nil {
 		return err
 	}
 	for i := range msgs {
-		fmt.Println(msgs[i])
+		if formatTabulate {
+			fmt.Fprintln(tabbed, msgs[i])
+		} else {
+			fmt.Println(msgs[i])
+		}
 	}
 	return nil
+}
+func tabifyFormat(format string, stripTokens bool) (str string) {
+	// Format first for consistency in replacements
+	format = lgrep.CurlyFormat(format)
+
+	// Turn any number of spaces into tabs.
+	spacerTab := regexp.MustCompile(`\s+(?!$)`)
+	str = spacerTab.ReplaceAllString(format, "\t")
+	if !stripTokens {
+		return str
+	}
+
+	// Remove tokens
+	tokenRemove := regexp.MustCompile(`({{\.?|}})`)
+	str = tokenRemove.ReplaceAllString(str, "")
+	return str
 }
 
 func main() {
