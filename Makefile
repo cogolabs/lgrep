@@ -1,7 +1,7 @@
 VERSION ?= $(shell git describe --dirty --tags)
 GIT_REF := $(shell git describe --always)
 RELEASE_DIR := $(shell pwd)/release/$(VERSION)
-BUILD_FLAGS := -ldflags "-X main.Version='$(VERSION)' -X main.Commit='$(GIT_REF)'"
+BUILD_FLAGS := -ldflags "-X main.Version=$(VERSION) -X main.Commit=$(GIT_REF)"
 
 .PHONY: release
 
@@ -23,3 +23,6 @@ build-osx:
 		./cmd/lgrep
 clean:
 	rm -rf $(dir $(RELEASE_DIR))*
+
+install:
+	go install $(BUILD_FLAGS) ./cmd/lgrep
