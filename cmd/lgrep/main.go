@@ -87,7 +87,7 @@ var (
 func App() *cli.App {
 	app := cli.NewApp()
 	app.Name = "lgrep"
-	app.Version = "1.0.0"
+	app.Version = fmt.Sprintf("%s (%s)", Version, Commit)
 	app.EnableBashCompletion = true
 
 	// Set up the application based on flags before handing off to the action
