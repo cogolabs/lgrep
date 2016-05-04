@@ -211,7 +211,15 @@ func (c Config) search() (results []*json.RawMessage, err error) {
 		return results, err
 	}
 
-	l.Debug = c.queryDebug
+	spec := &lgrep.SearchOptions{
+		Index:      c.queryIndex,
+		Size:       c.querySize,
+		SortTime:   lgrep.SortDesc,
+		QueryDebug: c.queryDebug,
+	}
+	if c.debug {
+		fmt.Printf("q> SearchOptions: %#+v\n", spec)
+	}
 
 	if c.queryFile != "" {
 		var (
@@ -226,13 +234,12 @@ func (c Config) search() (results []*json.RawMessage, err error) {
 		if err != nil {
 			return results, errors.Annotate(err, "Could not read the provided query file")
 		}
-		results, err = l.SearchWithSource(d)
+		results, err = l.SearchWithSource(d, spec)
 	}
 
 	if c.query != "" {
-		results, err = l.SimpleSearch(c.query, c.queryIndex, c.querySize)
+		results, err = l.SimpleSearch(c.query, spec)
 	}
-	fmt.Println(len(results))
 
 	return results, err
 }

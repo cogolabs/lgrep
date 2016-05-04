@@ -4,11 +4,13 @@ import (
 	"gopkg.in/olivere/elastic.v3"
 )
 
-const (
+var (
+	sortAsc  = true
+	sortDesc = false
 	// SortAsc sorts the search results with the field ascending.
-	SortAsc = true
+	SortAsc = &sortAsc
 	// SortDesc sorts the search results with the field descending.
-	SortDesc = false
+	SortDesc = &sortDesc
 )
 
 // SortByTimestamp adds the conventional timestamped fields to the
