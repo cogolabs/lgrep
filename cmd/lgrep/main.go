@@ -48,7 +48,7 @@ var (
 	// QueryFlags apply to runs that query with lgrep
 	QueryFlags = []cli.Flag{
 		cli.StringFlag{
-			Name:  "format, f",
+			Name:  "format, format-template, t",
 			Usage: "Simple formatting using text/template (go stdlib)",
 			Value: DefaultFormat,
 		},
@@ -57,7 +57,7 @@ var (
 			Usage: "Output the raw json _source of the results (1 line per result)",
 		},
 		cli.BoolFlag{
-			Name:  "stdline, ff",
+			Name:  "format-stdline, tt",
 			Usage: "Format lines with common format '" + StdlineFormat + "'.",
 		},
 		cli.BoolFlag{
