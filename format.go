@@ -14,9 +14,16 @@ import (
 	"github.com/juju/errors"
 )
 
+const (
+	normalTSField = "timestamp"
+)
+
 var (
 	openBrace  = []byte{'{', '{'}
 	closeBrace = []byte{'}', '}'}
+	// tsPreference determines the fields that are used to extract the
+	// timestamp for the document.
+	tsPreference = []string{"@timestamp", "date"}
 )
 
 // CurlyFormat turns a simple jq-like format string into a proper
@@ -96,18 +103,15 @@ func Format(sources []*json.RawMessage, format string) (msgs []string, err error
 	}
 	log.Debugf("Formatting %d sources", len(sources))
 	for i := range sources {
-		data := make(map[string]interface{})
-		var ts time.Time
-
-		data["date"] = ts
-		data["@timestamp"] = ts
+		var data map[string]interface{}
 
 		err = json.Unmarshal(*sources[i], &data)
 		if err != nil {
 			log.Error(errors.Annotate(err, "Error unmarshalling source"))
 			continue
 		}
-		normalizeTS(data)
+
+		data = normalizeTS(data)
 
 		var buf bytes.Buffer
 		err = tmpl.Execute(&buf, data)
@@ -122,26 +126,35 @@ func Format(sources []*json.RawMessage, format string) (msgs []string, err error
 
 // Some index used date and others the @timestamp field for the ts
 func normalizeTS(data map[string]interface{}) map[string]interface{} {
-	var lastT string
-
-	if t, ok := data["@timestamp"]; ok {
-		lastT = t.(string)
-		s, err := time.Parse(time.RFC3339, lastT)
-		if err == nil {
-			data["timestamp"] = s
+	// If the ts has already been normalized then don't try to parse
+	// this again.
+	if ts, hasKey := data["timestamp"]; hasKey {
+		if _, isTime := ts.(time.Time); isTime {
 			return data
 		}
 	}
 
-	if t, ok := data["date"]; ok {
-		lastT = t.(string)
-		s, err := time.Parse(time.RFC3339, lastT)
-		if err == nil {
-			data["timestamp"] = s
-			return data
+	var normalized bool
+
+	for _, tsField := range tsPreference {
+		if val, ok := data[tsField]; ok {
+			// If the value is a string then parse that out
+			str, ok := val.(string)
+			if !ok {
+				continue
+			}
+			ts, err := time.Parse(time.RFC3339, str)
+			if err != nil {
+				continue
+			}
+			normalized = true
+			data[normalTSField] = ts
+			break
 		}
 	}
-	data["timestamp"] = lastT
+	if !normalized {
+		log.Debug("Timestamp could not be normalized from data")
+	}
 	return data
 }
 
