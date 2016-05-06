@@ -107,8 +107,7 @@ func Format(sources []*json.RawMessage, format string) (msgs []string, err error
 
 		err = json.Unmarshal(*sources[i], &data)
 		if err != nil {
-			log.Error(errors.Annotate(err, "Error unmarshalling source"))
-			continue
+			return msgs, err
 		}
 
 		data = normalizeTS(data)
@@ -116,8 +115,7 @@ func Format(sources []*json.RawMessage, format string) (msgs []string, err error
 		var buf bytes.Buffer
 		err = tmpl.Execute(&buf, data)
 		if err != nil {
-			log.Error(errors.Annotate(err, "Error templating source"))
-			continue
+			return msgs, err
 		}
 		msgs = append(msgs, string(bytes.TrimSpace(buf.Bytes())))
 	}
