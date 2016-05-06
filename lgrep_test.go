@@ -20,7 +20,8 @@ func TestSearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Client error: %s", err)
 	}
-	docs, err := l.SimpleSearch("*", "", 10)
+	opts := &SearchOptions{Size: 10}
+	docs, err := l.SimpleSearch("*", opts)
 	if err != nil {
 		t.Fatalf("Error running search: %s", err)
 	}
@@ -35,18 +36,19 @@ func TestSearchFormat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Client error: %s", err)
 	}
-	docs, err := l.SimpleSearch("type:"+expected, "", 1)
+	opts := &SearchOptions{Size: 1}
+	docs, err := l.SimpleSearch("type:"+expected, opts)
 	if err != nil {
 		t.Fatalf("Error running search: %s", err)
 	}
 	if len(docs) != 1 {
 		t.Fatalf("Search should have retrieved 10 docs as specified")
 	}
-	msgs1, err := FormatSources(docs, "{{.type}}")
+	msgs1, err := Format(docs, "{{.type}}")
 	if err != nil {
 		t.Fatal(err)
 	}
-	msgs2, err := FormatSources(docs, ".type")
+	msgs2, err := Format(docs, ".type")
 	if err != nil {
 		t.Fatal(err)
 	}
