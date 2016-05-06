@@ -27,12 +27,12 @@ func TestCurlyFormat(t *testing.T) {
 
 func TestFieldTokens(t *testing.T) {
 	testData := map[string][]string{
-		"{{.one}} {{.two}}": {".one", ".two"},
-		".one .two":         {".one", ".two"},
-		".one .two.three":   {".one", ".two.three"},
+		"{{.one}} {{ .two}}": {"one", "two"},
+		".one .two":          {"one", "two"},
+		".one .two.three":    {"one", "two"},
 	}
 	for s, expected := range testData {
-		tokens := templateFieldTokens(s)
+		tokens := FieldTokens(s)
 		if len(tokens) != len(expected) {
 			t.Errorf("Incorrect number of tokens from '%s': %d != %d", s, len(tokens), len(expected))
 			continue

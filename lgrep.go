@@ -48,6 +48,9 @@ type SearchOptions struct {
 	SortTime *bool
 	// QueryDebug prints out the resulting query on the console if set
 	QueryDebug bool
+	// Fields indicates that search results should be limited to the
+	// specified field.
+	Fields []string
 }
 
 // apply the options given in the search specification to an already
@@ -65,22 +68,25 @@ func (s SearchOptions) apply(search *elastic.SearchService) {
 	if s.SortTime != nil {
 		SortByTimestamp(search, *s.SortTime)
 	}
+	if len(s.Fields) != 0 {
+		search.Fields(s.Fields...)
+	}
 }
 
 // SimpleSearch runs a lucene search configured by the SearchOption
 // specification.
-func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (docs []*json.RawMessage, err error) {
+func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, err error) {
 	if q == "" {
-		return docs, ErrEmptySearch
+		return results, ErrEmptySearch
 	}
-	docs = make([]*json.RawMessage, 0)
+	results = make([]Result, 0)
 	search, dbg := l.NewSearch()
 	search = SearchWithLucene(search, q)
 	if spec != nil {
 		// If user wants 0 then they're really not looking to get any
 		// results, don't execute.
 		if spec.Size == 0 {
-			return docs, err
+			return results, err
 		}
 	} else {
 		spec = &DefaultSpec
@@ -94,12 +100,20 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (docs []*json.RawMess
 	log.Debug("Submitting search request..")
 	res, err := search.Do()
 	if err != nil {
-		return docs, errors.Annotatef(err, "Search returned with error")
+		return results, errors.Annotatef(err, "Search returned with error")
 	}
 	for _, doc := range res.Hits.Hits {
-		docs = append(docs, doc.Source)
+
+		if len(spec.Fields) != 0 {
+			results = append(results, FieldResult(doc.Fields))
+			continue
+		}
+		if doc == nil || doc.Source == nil {
+			return results, errors.New("nil document returned")
+		}
+		results = append(results, SourceResult(*doc.Source))
 	}
-	return docs, nil
+	return results, nil
 }
 
 // SearchWithSource may be used to provide a pre-contstructed json
@@ -107,15 +121,15 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (docs []*json.RawMess
 // methods. The applied SearchOptions specification *is not fully
 // compatible* with a manually crafted query body but some options are
 // - see SearchOptions for any caveats.
-func (l LGrep) SearchWithSource(source interface{}, spec *SearchOptions) (docs []*json.RawMessage, err error) {
-	docs = make([]*json.RawMessage, 0)
+func (l LGrep) SearchWithSource(source interface{}, spec *SearchOptions) (results []Result, err error) {
+	results = make([]Result, 0)
 
 	search, dbg := l.NewSearch()
 	if spec != nil {
 		// If user wants 0 then they're really not looking to get any
 		// results, don't execute.
 		if spec.Size == 0 {
-			return docs, err
+			return results, err
 		}
 	} else {
 		spec = &DefaultSpec
@@ -129,12 +143,21 @@ func (l LGrep) SearchWithSource(source interface{}, spec *SearchOptions) (docs [
 	log.Debug("Submitting search request..")
 	res, err := search.Do()
 	if err != nil {
-		return docs, errors.Annotatef(err, "Search returned with error")
+		return results, errors.Annotatef(err, "Search returned with error")
 	}
+
 	for _, doc := range res.Hits.Hits {
-		docs = append(docs, doc.Source)
+
+		if len(spec.Fields) != 0 {
+			results = append(results, FieldResult(doc.Fields))
+			continue
+		}
+		if doc == nil || doc.Source == nil {
+			return results, errors.New("nil document returned")
+		}
+		results = append(results, SourceResult(*doc.Source))
 	}
-	return docs, nil
+	return results, nil
 }
 
 // SearchTimerange will return occurrences of the matching search in

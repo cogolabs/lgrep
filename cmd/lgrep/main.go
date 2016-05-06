@@ -204,7 +204,7 @@ type Config struct {
 }
 
 // Run the user's configured search
-func (c Config) search() (results []*json.RawMessage, err error) {
+func (c Config) search() (results []lgrep.Result, err error) {
 	l, err := lgrep.New(c.endpoint)
 	if err != nil {
 		log.Error(err)
@@ -216,6 +216,7 @@ func (c Config) search() (results []*json.RawMessage, err error) {
 		Size:       c.querySize,
 		SortTime:   lgrep.SortDesc,
 		QueryDebug: c.queryDebug,
+		Fields:     c.queryFields,
 	}
 	if c.debug {
 		fmt.Printf("q> SearchOptions: %#+v\n", spec)
@@ -246,14 +247,10 @@ func (c Config) search() (results []*json.RawMessage, err error) {
 
 // Format and print the results according to config to the specified
 // out.
-func (c Config) format(results []*json.RawMessage, out io.Writer) error {
+func (c Config) format(results []lgrep.Result, out io.Writer) error {
 	if c.formatRaw {
-		if len(c.queryFields) != 0 {
-			log.Error("Field selection and raw output is unsupported at this time")
-			return nil
-		}
-		for i := range results {
-			fmt.Printf("%s\n", *results[i])
+		for _, result := range results {
+			fmt.Println(result)
 		}
 		return nil
 	}
@@ -299,20 +296,32 @@ func RunQuery(c *cli.Context) (err error) {
 		formatTabulate: c.Bool("tabulate"),
 	}
 
+	if !run.formatRaw {
+		run.queryFields = lgrep.FieldTokens(run.formatTemplate)
+	}
+
 	if qf := c.String("query-fields"); qf != "" {
 		run.queryFields = strings.Split(qf, ",")
 	}
 
+	if len(run.queryFields) != 0 {
+		run.queryFields = append(run.queryFields, "@timestamp", "date")
+	}
+
 	results, err := run.search()
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
 
 	if len(results) == 0 {
 		log.Warn("0 results returned")
 		return nil
 	}
-	return run.format(results, os.Stdout)
+	err = run.format(results, os.Stdout)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return err
 }
 
 // tabifyFormat crafts a tabular format from a format string.

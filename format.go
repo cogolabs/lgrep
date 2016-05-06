@@ -2,7 +2,6 @@ package lgrep
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"regexp"
 	"strings"
@@ -82,11 +81,15 @@ func IsRawFormat(str string) bool {
 }
 
 // Format templates documents into strings for output
-func Format(sources []*json.RawMessage, format string) (msgs []string, err error) {
+func Format(results []Result, format string) (msgs []string, err error) {
 	// If its raw, cleanup the json and then spit that out
 	if IsRawFormat(format) {
-		for _, s := range sources {
-			msgs = append(msgs, string(bytes.TrimSpace(*s)))
+		for _, result := range results {
+			json, err := result.JSON()
+			if err != nil {
+				return msgs, err
+			}
+			msgs = append(msgs, string(json))
 		}
 		return msgs, nil
 	}
@@ -101,11 +104,9 @@ func Format(sources []*json.RawMessage, format string) (msgs []string, err error
 	if err != nil {
 		return msgs, errors.Annotate(err, "Format template invalid")
 	}
-	log.Debugf("Formatting %d sources", len(sources))
-	for i := range sources {
-		var data map[string]interface{}
-
-		err = json.Unmarshal(*sources[i], &data)
+	log.Debugf("Formatting %d results", len(results))
+	for _, result := range results {
+		data, err := result.Map()
 		if err != nil {
 			return msgs, err
 		}
@@ -156,16 +157,18 @@ func normalizeTS(data map[string]interface{}) map[string]interface{} {
 	return data
 }
 
-// templateFieldTokens extracts the tokens that are used in the
+// FieldTokens extracts the top level tokens that are used in the
 // template.
-func templateFieldTokens(t string) (tokens []string) {
+func FieldTokens(t string) (tokens []string) {
 	t = CurlyFormat(t)
 	matcher := regexp.MustCompile(`{{([^{}]+)}}`)
 	matches := matcher.FindAllStringSubmatch(t, -1)
 	for _, match := range matches {
-		token := match[1]
-		tokens = append(tokens, strings.TrimSpace(token))
+		// Turn .t1.t2.tN -> t1
+		token := strings.Split(strings.TrimSpace(strings.Replace(match[1], ".", " ", -1)), " ")
+		tokens = append(tokens, token[0])
 	}
+
 	return tokens
 }
 
