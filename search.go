@@ -32,6 +32,6 @@ func SortByTimestamp(s *elastic.SearchService, asc bool) *elastic.SearchService 
 // SearchWithLucene transforms the textual query into the necessary
 // structure to search logstash data.
 func SearchWithLucene(s *elastic.SearchService, q string) *elastic.SearchService {
-	query := elastic.NewQueryStringQuery(q).AnalyzeWildcard(true)
-	return s.Query(query)
+	lucene := elastic.NewQueryStringQuery(q).AnalyzeWildcard(true)
+	return s.Query(elastic.NewConstantScoreQuery(lucene))
 }
