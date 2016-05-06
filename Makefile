@@ -3,7 +3,7 @@ GIT_REF := $(shell git describe --always)
 RELEASE_DIR := $(shell pwd)/release/$(VERSION)
 BUILD_FLAGS := -ldflags "-X main.Version=$(VERSION) -X main.Commit=$(GIT_REF)"
 
-.PHONY: release
+.PHONY: release test
 
 
 release: build-linux build-osx
@@ -26,3 +26,6 @@ clean:
 
 install:
 	go install $(BUILD_FLAGS) ./cmd/lgrep
+
+test:
+	go test . ./cmd/lgrep

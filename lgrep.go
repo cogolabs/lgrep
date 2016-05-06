@@ -69,7 +69,9 @@ func (s SearchOptions) apply(search *elastic.SearchService) {
 		SortByTimestamp(search, *s.SortTime)
 	}
 	if len(s.Fields) != 0 {
-		search.Fields(s.Fields...)
+		fsc := elastic.NewFetchSourceContext(true)
+		fsc.Include(s.Fields...)
+		search.FetchSourceContext(fsc)
 	}
 }
 
@@ -102,18 +104,7 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 	if err != nil {
 		return results, errors.Annotatef(err, "Search returned with error")
 	}
-	for _, doc := range res.Hits.Hits {
-
-		if len(spec.Fields) != 0 {
-			results = append(results, FieldResult(doc.Fields))
-			continue
-		}
-		if doc == nil || doc.Source == nil {
-			return results, errors.New("nil document returned")
-		}
-		results = append(results, SourceResult(*doc.Source))
-	}
-	return results, nil
+	return consumeResults(res, spec)
 }
 
 // SearchWithSource may be used to provide a pre-contstructed json
@@ -122,8 +113,6 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 // compatible* with a manually crafted query body but some options are
 // - see SearchOptions for any caveats.
 func (l LGrep) SearchWithSource(source interface{}, spec *SearchOptions) (results []Result, err error) {
-	results = make([]Result, 0)
-
 	search, dbg := l.NewSearch()
 	if spec != nil {
 		// If user wants 0 then they're really not looking to get any
@@ -145,10 +134,15 @@ func (l LGrep) SearchWithSource(source interface{}, spec *SearchOptions) (result
 	if err != nil {
 		return results, errors.Annotatef(err, "Search returned with error")
 	}
+	return consumeResults(res, spec)
+}
 
+// consumeResults ingests the results from the returned data and
+// transforms them into Result's.
+func consumeResults(res *elastic.SearchResult, spec *SearchOptions) (results []Result, err error) {
 	for _, doc := range res.Hits.Hits {
-
-		if len(spec.Fields) != 0 {
+		// Extract the fields that were returned
+		if len(spec.Fields) != 0 && len(doc.Fields) != 0 {
 			results = append(results, FieldResult(doc.Fields))
 			continue
 		}
