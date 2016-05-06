@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"regexp"
 	"strings"
 	"text/template"
 	"time"
@@ -144,6 +145,20 @@ func normalizeTS(data map[string]interface{}) map[string]interface{} {
 	return data
 }
 
+// templateFieldTokens extracts the tokens that are used in the
+// template.
+func templateFieldTokens(t string) (tokens []string) {
+	t = CurlyFormat(t)
+	matcher := regexp.MustCompile(`{{([^{}]+)}}`)
+	matches := matcher.FindAllStringSubmatch(t, -1)
+	for _, match := range matches {
+		token := match[1]
+		tokens = append(tokens, strings.TrimSpace(token))
+	}
+	return tokens
+}
+
+// strftime is a template formatting function
 func strftime(format string, d interface{}) string {
 	var t time.Time
 	switch v := d.(type) {
