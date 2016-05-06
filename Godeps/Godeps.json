@@ -1,37 +1,26 @@
 {
 	"ImportPath": "github.com/cogolabs/lgrep",
-	"GoVersion": "go1.6",
-	"GodepVersion": "v62",
+	"GoVersion": "go1.6.2",
 	"Packages": [
 		"./..."
 	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
-			"Comment": "v0.6.2-10-g51fe59a",
-			"Rev": "51fe59aca108dc5680109e7b2051cbdcfa5a253c"
+			"Comment": "v0.10.0-16-gcd7d1bb",
+			"Rev": "cd7d1bbe41066b6c1f19780f895901052150a575"
 		},
 		{
 			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "v1.16.0-13-g839f07b",
-			"Rev": "839f07bfe4819fa1434fa907d0804ce6ec45a5df"
+			"Comment": "v1.16.0-15-g75b97d0",
+			"Rev": "75b97d09d9f5792ff997e249a330a3ca28f8b537"
 		},
 		{
 			"ImportPath": "github.com/juju/errors",
-			"Rev": "1b5e39b83d1835fa480e0c2ddefb040ee82d58b3"
+			"Rev": "b2c7a7da5b2995941048f60146e67702a292e468"
 		},
 		{
 			"ImportPath": "gopkg.in/olivere/elastic.v3",
-			"Comment": "v3.0.34",
-			"Rev": "9ccf48af2c7c0a61ce157876b2be9287679d261b"
-		},
-		{
-			"ImportPath": "gopkg.in/olivere/elastic.v3/backoff",
-			"Comment": "v3.0.34",
-			"Rev": "9ccf48af2c7c0a61ce157876b2be9287679d261b"
-		},
-		{
-			"ImportPath": "gopkg.in/olivere/elastic.v3/uritemplates",
 			"Comment": "v3.0.34",
 			"Rev": "9ccf48af2c7c0a61ce157876b2be9287679d261b"
 		}
