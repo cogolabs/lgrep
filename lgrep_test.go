@@ -1,13 +1,22 @@
 package lgrep
 
 import (
+	"encoding/json"
 	"errors"
+	"io/ioutil"
+	"strings"
 	"testing"
 
 	log "github.com/Sirupsen/logrus"
 )
 
-var TestEndpoint = "http://localhost:9200"
+const (
+	testJSONQueryPath = "./test/test_json_query.json"
+)
+
+var (
+	testJSONQuery json.RawMessage
+)
 
 func init() {
 	data, err := ioutil.ReadFile(testJSONQueryPath)
@@ -18,6 +27,8 @@ func init() {
 	log.SetLevel(log.DebugLevel)
 	var _ = log.Logger{}
 }
+
+var TestEndpoint = "http://localhost:9200"
 
 func TestSearch(t *testing.T) {
 	l, err := New(TestEndpoint)
@@ -96,9 +107,9 @@ func TestValidateQuery(t *testing.T) {
 
 	expectations := []struct {
 		spec    SearchOptions
-		search  string // lucene search
-		query   []byte // json search
-		invalid error  // expect to be invalid
+		search  string      // lucene search
+		query   interface{} // json search
+		invalid error       // expect to be invalid
 		desc    string
 	}{
 		// Valid searches
@@ -108,30 +119,7 @@ func TestValidateQuery(t *testing.T) {
 			"*-* pattern and * search with no type"},
 		{SearchOptions{}, "*", nil, Valid,
 			"loose * query"},
-		{SearchOptions{}, "", []byte(`
-		{
-		  "query": {
-		    "query_string": {
-		      "analyze_wildcard": true,
-		      "query": "service:kernel"
-		    }
-		  },
-		  "size": 1,
-		  "sort": [
-		    {
-		      "@timestamp": {
-		        "order": "desc",
-		        "unmapped_type": "boolean"
-		      }
-		    },
-		    {
-		      "date": {
-		        "order": "desc",
-		        "unmapped_type": "boolean"
-		      }
-		    }
-		  ]
-		}`),
+		{SearchOptions{Type: "journald"}, "", testJSONQuery,
 			Valid,
 			"using valid json"},
 
@@ -144,6 +132,8 @@ func TestValidateQuery(t *testing.T) {
 			"querying nonexistent index"},
 		{SearchOptions{}, "", []byte(`{]`), AnyError,
 			"using bad json"},
+		{SearchOptions{}, "", []byte(`{"key": "value"}`), ErrInvalidQuery,
+			"using incorrect query properties"},
 		{SearchOptions{}, "", []byte(`{}`), ErrInvalidQuery,
 			"using empty json"},
 	}
@@ -156,13 +146,36 @@ func TestValidateQuery(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 
 	for _, testcase := range expectations {
+		var result ValidationResponse
+		explain := func() {
+
+			repeat := 0
+			for i, ex := range result.Explanations {
+				if i != 0 {
+					last := strings.Split(result.Explanations[i].Error, " ")[1]
+					this := strings.Split(result.Explanations[i-1].Error, " ")[1]
+					if last == this {
+						repeat += 1
+						if i == len(result.Explanations)-1 {
+							t.Logf("\tAbove message repeated %d times for different indices.", repeat)
+
+						}
+						continue
+					}
+					repeat = 0
+				}
+				if !ex.Valid {
+					t.Logf("\t%s", ex.Error)
+				}
+			}
+		}
 		search, source := l.NewSearch()
 		// Lucene search specified for case
 		if testcase.search != "" {
 			SearchWithLucene(search, testcase.search)
-			err = l.validate(source, testcase.spec)
+			result, err = l.validate(source, testcase.spec)
 		} else if testcase.query != nil {
-			err = l.validate(testcase.query, testcase.spec)
+			result, err = l.validate(testcase.query, testcase.spec)
 		}
 
 		if err != nil {
@@ -177,14 +190,17 @@ func TestValidateQuery(t *testing.T) {
 			// Expected error but its not the one returned
 			if testcase.invalid != nil {
 				t.Errorf("Unexpected error during validation: %s", err)
+				explain()
 				continue
 			}
 
 			// Otherwise, it was an error, and it wasn't supposed to be.
 			if testcase.desc != "" {
 				t.Errorf("Query %s was expected to be valid: %s", testcase.desc, err)
+				explain()
 			} else {
 				t.Error("Invalid query error for valid query: %s", err)
+				explain()
 			}
 			continue
 		}

@@ -99,7 +99,7 @@ func (s SearchOptions) buildURL(endpoint string) (path string, params url.Values
 	if err != nil {
 		return "", params, err
 	}
-	return path, params, err
+	return path, url.Values{}, err
 }
 
 // apply the options given in the search specification to an already

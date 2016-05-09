@@ -1,0 +1,35 @@
+	{
+  "_source": {
+    "excludes": [],
+    "includes": [
+      "message",
+      "@timestamp",
+      "date"
+    ]
+  },
+  "query": {
+    "constant_score": {
+      "filter": {
+        "query_string": {
+          "analyze_wildcard": true,
+          "query": "service:kernel"
+        }
+      }
+    }
+  },
+  "size": 1,
+  "sort": [
+    {
+      "@timestamp": {
+        "order": "desc",
+        "unmapped_type": "boolean"
+      }
+    },
+    {
+      "date": {
+        "order": "desc",
+        "unmapped_type": "boolean"
+      }
+    }
+  ]
+}

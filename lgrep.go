@@ -150,25 +150,45 @@ func (l LGrep) NewSearch() (search *elastic.SearchService, source *elastic.Searc
 	return search, source
 }
 
-func (l LGrep) validate(querySource interface{}, spec SearchOptions) (err error) {
+// ValidationResponse is the Elasticsearch validation result payload.
+type ValidationResponse struct {
+	Valid  bool
+	Shards struct {
+		Total      int
+		Successful int
+		Failed     int
+	} `json:"_shards"`
+	Explanations []ValidationExplanation
+}
+
+// ValidationExplanation is a per-index explanation of a invalid query
+// validation result.
+type ValidationExplanation struct {
+	Index string
+	Valid bool
+	Error string
+}
+
+func (l LGrep) validate(querySource interface{}, spec SearchOptions) (result ValidationResponse, err error) {
 	path, params, err := spec.buildURL("_validate/query")
 	if err != nil {
-		return err
+		return result, err
 	}
 	var body interface{}
-	log.Debugf("Validating query at '%s%s'", path, params.Encode())
+	params.Set("explain", "true")
+	log.Debugf("Validating query at '%s?%s'", path, params.Encode())
 
 	switch v := querySource.(type) {
 	case elastic.SearchSource:
 		body, err = v.Source()
 		if err != nil {
-			return err
+			return result, err
 		}
 
 	case *elastic.SearchSource:
 		body, err = v.Source()
 		if err != nil {
-			return err
+			return result, err
 		}
 
 	case []byte:
@@ -185,29 +205,20 @@ func (l LGrep) validate(querySource interface{}, spec SearchOptions) (err error)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "index_not_found_exception") {
-			return ErrInvalidIndex
+			return result, ErrInvalidIndex
 		}
-		return err
+		return result, err
 	}
-
-	var result struct {
-		Valid        bool
-		Explanations []struct {
-			Index string
-			Valid bool
-			Error string
-		}
-	}
-
+	result.Explanations = make([]ValidationExplanation, 0)
 	err = json.Unmarshal(resp.Body, &result)
 	if err != nil {
-		return err
+		return result, err
 	}
 	if result.Valid {
-		return nil
+		return result, nil
 	}
-	log.Debugf("%s", resp.Body)
-	return ErrInvalidQuery
+
+	return result, ErrInvalidQuery
 }
 
 // printQueryDebug prints out the formatted JSON query body that will
