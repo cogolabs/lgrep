@@ -1,8 +1,13 @@
 package lgrep
 
 import (
+	"errors"
 	"testing"
+
+	log "github.com/Sirupsen/logrus"
 )
+
+var TestEndpoint = "http://localhost:9200"
 
 func init() {
 	data, err := ioutil.ReadFile(testJSONQueryPath)
@@ -11,9 +16,8 @@ func init() {
 	}
 	testJSONQuery = json.RawMessage(data)
 	log.SetLevel(log.DebugLevel)
+	var _ = log.Logger{}
 }
-
-var TestEndpoint = "http://localhost:9200"
 
 func TestSearch(t *testing.T) {
 	l, err := New(TestEndpoint)
@@ -80,5 +84,120 @@ func TestSearchFields(t *testing.T) {
 	}
 	if len(msgs1) != 1 {
 		t.Errorf("Was only to return a single field: type. %#v", msgs1[0])
+	}
+}
+
+func TestValidateQuery(t *testing.T) {
+	var (
+		Valid    error
+		AnyError error
+	)
+	AnyError = errors.New("any")
+
+	expectations := []struct {
+		spec    SearchOptions
+		search  string // lucene search
+		query   []byte // json search
+		invalid error  // expect to be invalid
+		desc    string
+	}{
+		// Valid searches
+		{SearchOptions{Index: "*-*", Type: "journald"}, "*", nil, Valid,
+			"*-* pattern and * search with type"},
+		{SearchOptions{Index: "*-*"}, "*", nil, Valid,
+			"*-* pattern and * search with no type"},
+		{SearchOptions{}, "*", nil, Valid,
+			"loose * query"},
+		{SearchOptions{}, "", []byte(`
+		{
+		  "query": {
+		    "query_string": {
+		      "analyze_wildcard": true,
+		      "query": "service:kernel"
+		    }
+		  },
+		  "size": 1,
+		  "sort": [
+		    {
+		      "@timestamp": {
+		        "order": "desc",
+		        "unmapped_type": "boolean"
+		      }
+		    },
+		    {
+		      "date": {
+		        "order": "desc",
+		        "unmapped_type": "boolean"
+		      }
+		    }
+		  ]
+		}`),
+			Valid,
+			"using valid json"},
+
+		// Strange but true cases
+		{SearchOptions{Type: "nonexistent"}, "*", nil, Valid,
+			"querying a nonexistent type"},
+
+		// Invalid searches
+		{SearchOptions{Index: "nonexistent"}, "*", nil, ErrInvalidIndex,
+			"querying nonexistent index"},
+		{SearchOptions{}, "", []byte(`{]`), AnyError,
+			"using bad json"},
+		{SearchOptions{}, "", []byte(`{}`), ErrInvalidQuery,
+			"using empty json"},
+	}
+
+	l, err := New(TestEndpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	log.SetLevel(log.DebugLevel)
+
+	for _, testcase := range expectations {
+		search, source := l.NewSearch()
+		// Lucene search specified for case
+		if testcase.search != "" {
+			SearchWithLucene(search, testcase.search)
+			err = l.validate(source, testcase.spec)
+		} else if testcase.query != nil {
+			err = l.validate(testcase.query, testcase.spec)
+		}
+
+		if err != nil {
+			// Expected some kind of issue
+			if testcase.invalid == AnyError {
+				continue
+			}
+			// Expected errors
+			if err == testcase.invalid {
+				continue
+			}
+			// Expected error but its not the one returned
+			if testcase.invalid != nil {
+				t.Errorf("Unexpected error during validation: %s", err)
+				continue
+			}
+
+			// Otherwise, it was an error, and it wasn't supposed to be.
+			if testcase.desc != "" {
+				t.Errorf("Query %s was expected to be valid: %s", testcase.desc, err)
+			} else {
+				t.Error("Invalid query error for valid query: %s", err)
+			}
+			continue
+		}
+
+		// The testcase was supposed to be invalid but the call didn't
+		// return any errors.
+		if testcase.invalid != Valid {
+			if testcase.desc != "" {
+				t.Errorf("Expected %s to be invalid, but no error was encountered.", testcase.desc)
+			} else {
+				t.Error("Expected this query to be invalid, but no error was encountered.")
+			}
+			continue
+		}
 	}
 }
