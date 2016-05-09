@@ -82,8 +82,8 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 // methods. The applied SearchOptions specification *is not fully
 // compatible* with a manually crafted query body but some options are
 // - see SearchOptions for any caveats.
-func (l LGrep) SearchWithSource(source interface{}, spec *SearchOptions) (results []Result, err error) {
-	search, source := l.NewSearch()
+func (l LGrep) SearchWithSource(query interface{}, spec *SearchOptions) (results []Result, err error) {
+	search, _ := l.NewSearch()
 	if spec != nil {
 		// If user wants 0 then they're really not looking to get any
 		// results, don't execute.
@@ -94,7 +94,7 @@ func (l LGrep) SearchWithSource(source interface{}, spec *SearchOptions) (result
 		spec = &DefaultSpec
 	}
 	spec.apply(search)
-	switch v := source.(type) {
+	switch v := query.(type) {
 	case json.RawMessage:
 		search.Source(&v)
 	case []byte:
@@ -103,11 +103,11 @@ func (l LGrep) SearchWithSource(source interface{}, spec *SearchOptions) (result
 	case map[string]interface{}:
 		search.Source(v)
 	default:
-		log.Fatal("SearchWithSource does not support other types at this time.")
+		log.Fatalf("SearchWithSource does not support type '%T' at this time.", v)
 	}
 
 	if spec.QueryDebug {
-		printQueryDebug(os.Stderr, source)
+		printQueryDebug(os.Stderr, query)
 	}
 
 	log.Debug("Submitting search request..")
@@ -213,7 +213,18 @@ func (l LGrep) validate(querySource interface{}, spec SearchOptions) (err error)
 // printQueryDebug prints out the formatted JSON query body that will
 // be submitted.
 func printQueryDebug(out io.Writer, query interface{}) {
-	queryJSON, err := json.MarshalIndent(query, "q> ", "  ")
+	var (
+		queryJSON []byte
+		err       error
+	)
+
+	// json.RawMessage must be passed as a pointer to be Marshaled
+	// correctly.
+	if raw, ok := query.(json.RawMessage); ok {
+		queryJSON, err = json.MarshalIndent(&raw, "q> ", "  ")
+	} else {
+		queryJSON, err = json.MarshalIndent(query, "q> ", "  ")
+	}
 	if err == nil {
 		fmt.Fprintf(out, "q> %s\n", queryJSON)
 	}

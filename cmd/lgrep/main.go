@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -234,7 +235,7 @@ func (c Config) search() (results []lgrep.Result, err error) {
 		if err != nil {
 			return results, errors.Annotate(err, "Could not read the provided query file")
 		}
-		results, err = l.SearchWithSource(d, spec)
+		results, err = l.SearchWithSource(json.RawMessage(d), spec)
 	}
 
 	if c.query != "" {
