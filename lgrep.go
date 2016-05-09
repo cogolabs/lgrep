@@ -124,9 +124,10 @@ func (l LGrep) SearchWithSource(source interface{}, spec *SearchOptions) (result
 		spec = &DefaultSpec
 	}
 	spec.apply(search)
+	search.Source(source)
 
 	if spec.QueryDebug {
-		dbg(os.Stderr)
+		printQueryDebug(os.Stderr, source)
 	}
 
 	log.Debug("Submitting search request..")
@@ -170,11 +171,14 @@ func (l LGrep) NewSearch() (search *elastic.SearchService, dbg func(wr io.Writer
 	dbg = func(wr io.Writer) {
 		queryMap, err := source.Source()
 		if err == nil {
-			queryJSON, err := json.MarshalIndent(queryMap, "q> ", "  ")
-			if err == nil {
-				fmt.Fprintf(wr, "q> %s\n", queryJSON)
-			}
+			printQueryDebug(wr, queryMap)
 		}
 	}
 	return search, dbg
+
+func printQueryDebug(out io.Writer, query interface{}) {
+	queryJSON, err := json.MarshalIndent(query, "q> ", "  ")
+	if err == nil {
+		fmt.Fprintf(out, "q> %s\n", queryJSON)
+	}
 }
