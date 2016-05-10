@@ -52,8 +52,6 @@ type SearchOptions struct {
 	// SortTime causes the query to be sorted by the appropriate
 	// timestamp field
 	SortTime *bool
-	// QueryDebug prints out the resulting query on the console if set
-	QueryDebug bool
 	// Fields indicates that search results should be limited to the
 	// specified field.
 	Fields []string
@@ -61,6 +59,11 @@ type SearchOptions struct {
 	Type string
 	// Types are the types of documents that should be searched.
 	Types []string
+	// QueryDebug prints out the resulting query on the console if set
+	QueryDebug bool
+	// QuerySkipValidate causes the query to be submitted to the server
+	// without a pre-validation step.
+	QuerySkipValidate bool
 }
 
 // buildURL generates the url parts that are appropriate to the
