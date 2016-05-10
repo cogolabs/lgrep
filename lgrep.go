@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -19,6 +18,9 @@ var (
 	// ErrInvalidQuery indicates that the provided query was not
 	// validated by Elasticsearch.
 	ErrInvalidQuery = errors.New("Invalid search query")
+	// ErrInvalidQuery indicates that the provided query was not
+	// validated by Elasticsearch.
+	ErrInvalidLuceneSyntax = errors.New("Invalid Lucene syntax - http://localhost/goto/syntax")
 	// ErrInvalidIndex indicates that a query was attempted on a non-existent index or index pattern.
 	ErrInvalidIndex = errors.New("Invalid query on unknown index")
 	// DefaultSpec provides a reasonable default search specification.
@@ -148,77 +150,6 @@ func (l LGrep) NewSearch() (search *elastic.SearchService, source *elastic.Searc
 	search = l.Client.Search().SearchSource(source)
 
 	return search, source
-}
-
-// ValidationResponse is the Elasticsearch validation result payload.
-type ValidationResponse struct {
-	Valid  bool
-	Shards struct {
-		Total      int
-		Successful int
-		Failed     int
-	} `json:"_shards"`
-	Explanations []ValidationExplanation
-}
-
-// ValidationExplanation is a per-index explanation of a invalid query
-// validation result.
-type ValidationExplanation struct {
-	Index string
-	Valid bool
-	Error string
-}
-
-func (l LGrep) validate(querySource interface{}, spec SearchOptions) (result ValidationResponse, err error) {
-	path, params, err := spec.buildURL("_validate/query")
-	if err != nil {
-		return result, err
-	}
-	var body interface{}
-	params.Set("explain", "true")
-	log.Debugf("Validating query at '%s?%s'", path, params.Encode())
-
-	switch v := querySource.(type) {
-	case elastic.SearchSource:
-		body, err = v.Source()
-		if err != nil {
-			return result, err
-		}
-
-	case *elastic.SearchSource:
-		body, err = v.Source()
-		if err != nil {
-			return result, err
-		}
-
-	case []byte:
-		data := json.RawMessage(v)
-		body = &data
-	default:
-		body = v
-	}
-
-	if log.GetLevel() == log.DebugLevel {
-		printQueryDebug(os.Stderr, body)
-	}
-	resp, err := l.Client.PerformRequest("GET", path, params, body)
-
-	if err != nil {
-		if strings.Contains(err.Error(), "index_not_found_exception") {
-			return result, ErrInvalidIndex
-		}
-		return result, err
-	}
-	result.Explanations = make([]ValidationExplanation, 0)
-	err = json.Unmarshal(resp.Body, &result)
-	if err != nil {
-		return result, err
-	}
-	if result.Valid {
-		return result, nil
-	}
-
-	return result, ErrInvalidQuery
 }
 
 // printQueryDebug prints out the formatted JSON query body that will
