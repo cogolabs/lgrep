@@ -126,9 +126,9 @@ func (s SearchOptions) buildURL(endpoint string) (path string, params url.Values
 	return path, url.Values{}, err
 }
 
-// apply the options given in the search specification to an already
-// instaniated search.
-func (s SearchOptions) apply(search *elastic.SearchService) {
+// configureSearch applies the options given in the search
+// specification to an already instaniated search.
+func (s SearchOptions) configureSearch(search *elastic.SearchService) {
 	if s.Size != 0 {
 		search.Size(s.Size)
 	}
@@ -145,5 +145,19 @@ func (s SearchOptions) apply(search *elastic.SearchService) {
 		fsc := elastic.NewFetchSourceContext(true)
 		fsc.Include(s.Fields...)
 		search.FetchSourceContext(fsc)
+	}
+}
+
+// configureScroll applies the options given in the search
+// specification to an already instaniated scroll.
+func (s SearchOptions) configureScroll(scroll *elastic.ScrollService) {
+	if s.Size != 0 {
+		scroll.Size(s.Size)
+	}
+	if s.Index != "" {
+		scroll.Index(s.Index)
+	}
+	if len(s.Indices) != 0 {
+		scroll.Index(s.Indices...)
 	}
 }

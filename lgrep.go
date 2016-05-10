@@ -52,7 +52,7 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 	} else {
 		spec = &DefaultSpec
 	}
-	spec.apply(search)
+	spec.configureSearch(search)
 
 	// Spit out the query that will be sent.
 	if spec.QueryDebug {
@@ -94,7 +94,7 @@ func (l LGrep) SearchWithSource(raw interface{}, spec *SearchOptions) (results [
 	} else {
 		spec = &DefaultSpec
 	}
-	spec.apply(search)
+	spec.configureSearch(search)
 	var query elastic.Query
 	switch v := raw.(type) {
 	case json.RawMessage:
@@ -125,6 +125,31 @@ func (l LGrep) SearchWithSource(raw interface{}, spec *SearchOptions) (results [
 		return results, errors.Annotatef(err, "Search returned with error")
 	}
 	return consumeResults(res, spec)
+}
+
+// execute runs the search and accomodates any necessary work to
+// ensure the search is executed properly.
+func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec SearchOptions) (results chan Result, streamErr chan error) {
+	results = make(chan Result, 100)
+	streamErr = make(chan error, 1)
+
+	var service Searcher = search
+
+	if spec.Size > 10000 {
+		scroll := l.Scroll()
+		spec.configureScroll(scroll)
+		scroll.Query(query)
+		service = scroll
+	}
+
+	go func() {
+		_, err := service.Do()
+		if err != nil {
+			streamErr <- err
+			return
+		}
+	}()
+	return results, streamErr
 }
 
 // consumeResultpps ingests the results from the returned data and
