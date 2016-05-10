@@ -11,7 +11,7 @@ import (
 
 var (
 	// unvalidatableKeys removes keys that cannot be validated via the API.
-	unvalidatableKeys = []string{"_source", "size"}
+	unvalidatableKeys = []string{"_source", "size", "sort"}
 	// ErrInvalidQuery indicates that the provided query was not
 	// validated by Elasticsearch.
 	ErrInvalidQuery = errors.New("Invalid search query")
@@ -89,6 +89,8 @@ func (l LGrep) validateBody(query interface{}, spec SearchOptions) (response *el
 		query, _ = v.Source()
 	case *elastic.SearchSource:
 		query, _ = v.Source()
+	case json.RawMessage:
+		query = &v
 	default:
 		query = v
 	}
@@ -97,6 +99,7 @@ func (l LGrep) validateBody(query interface{}, spec SearchOptions) (response *el
 	if err != nil {
 		return response, errors.Errorf("Error during validation prep [0]: %s", err)
 	}
+
 	err = json.Unmarshal(data, &queryMap)
 	if err != nil {
 		return response, errors.Errorf("Error during validation prep [1]: %s", err)
