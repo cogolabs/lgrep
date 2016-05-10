@@ -28,4 +28,4 @@ install:
 	go install $(BUILD_FLAGS) ./cmd/lgrep
 
 test:
-	go test . ./cmd/lgrep
+	go test . ./test ./cmd/lgrep
