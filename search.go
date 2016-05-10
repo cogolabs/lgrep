@@ -1,6 +1,7 @@
 package lgrep
 
 import (
+	"encoding/json"
 	"net/url"
 	"strings"
 
@@ -16,6 +17,26 @@ var (
 	// SortDesc sorts the search results with the field descending.
 	SortDesc = &sortDesc
 )
+
+// Searcher is any service that provides a means to execute a query.
+type Searcher interface {
+	Do() (*elastic.SearchResult, error)
+}
+
+// QueryMap is a type of map specifically for use as a query that
+// satisfies the elastic.Query interface.
+type QueryMap map[string]interface{}
+
+func (q QueryMap) Source() (interface{}, error) {
+	return q, nil
+}
+
+// QueryMapFromJSON transforms JSON blobs into a QueryMap for querying.
+func QueryMapFromJSON(data []byte) (qm QueryMap, err error) {
+	qm = make(QueryMap)
+	err = json.Unmarshal(data, &qm)
+	return qm, err
+}
 
 // SortByTimestamp adds the conventional timestamped fields to the
 // search query.

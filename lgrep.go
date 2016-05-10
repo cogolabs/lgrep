@@ -83,7 +83,7 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 // methods. The applied SearchOptions specification *is not fully
 // compatible* with a manually crafted query body but some options are
 // - see SearchOptions for any caveats.
-func (l LGrep) SearchWithSource(query interface{}, spec *SearchOptions) (results []Result, err error) {
+func (l LGrep) SearchWithSource(raw interface{}, spec *SearchOptions) (results []Result, err error) {
 	search, _ := l.NewSearch()
 	if spec != nil {
 		// If user wants 0 then they're really not looking to get any
@@ -95,14 +95,15 @@ func (l LGrep) SearchWithSource(query interface{}, spec *SearchOptions) (results
 		spec = &DefaultSpec
 	}
 	spec.apply(search)
-	switch v := query.(type) {
+	var query elastic.Query
+	switch v := raw.(type) {
 	case json.RawMessage:
-		search.Source(&v)
+		query, err = QueryMapFromJSON(v)
 	case []byte:
 		data := json.RawMessage(v)
-		search.Source(&data)
+		query, err = QueryMapFromJSON(data)
 	case map[string]interface{}:
-		search.Source(v)
+		query = QueryMap(v)
 	default:
 		log.Fatalf("SearchWithSource does not support type '%T' at this time.", v)
 	}
