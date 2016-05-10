@@ -2,12 +2,16 @@ package lgrep
 
 import (
 	"encoding/json"
-	"os"
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/juju/errors"
 	"gopkg.in/olivere/elastic.v3"
+)
+
+var (
+	// unvalidatableKeys removes keys that cannot be validated via the API.
+	unvalidatableKeys = []string{"_source", "size"}
 )
 
 // ValidationResponse is the Elasticsearch validation result payload.
@@ -72,45 +76,33 @@ func (l LGrep) validateBody(query interface{}, spec SearchOptions) (response *el
 	if err != nil {
 		return response, err
 	}
-	var (
-		body     interface{}
-		JSONBody *json.RawMessage
-	)
+	switch v := query.(type) {
+	case elastic.SearchSource:
+		query, _ = v.Source()
+	case *elastic.SearchSource:
+		query, _ = v.Source()
+	default:
+		query = v
+	}
+	var queryMap map[string]interface{}
+	data, err := json.Marshal(query)
+	if err != nil {
+		return response, errors.Errorf("Error during validation prep [0]: %s", err)
+	}
+	err = json.Unmarshal(data, &queryMap)
+	if err != nil {
+		return response, errors.Errorf("Error during validation prep [1]: %s", err)
+	}
+
+	for _, key := range unvalidatableKeys {
+		delete(queryMap, key)
+	}
+	log.Warnf("%#v", queryMap)
+
 	params.Set("explain", "true")
 	log.Debugf("Validating query at '%s?%s'", path, params.Encode())
 
-	switch v := query.(type) {
-	case elastic.SearchSource:
-		body, err = v.Source()
-		if err != nil {
-			return response, err
-		}
-
-	case *elastic.SearchSource:
-		body, err = v.Source()
-		if err != nil {
-			return response, err
-		}
-
-	case []byte:
-		data := json.RawMessage(v)
-		JSONBody = &data
-	}
-	if body != nil {
-		if log.GetLevel() == log.DebugLevel {
-			printQueryDebug(os.Stderr, body)
-		}
-		return l.Client.PerformRequest("GET", path, params, body)
-	}
-
-	if JSONBody != nil {
-		if log.GetLevel() == log.DebugLevel {
-			printQueryDebug(os.Stderr, JSONBody)
-		}
-		return l.Client.PerformRequest("GET", path, params, JSONBody)
-	}
-
-	return nil, errors.New("Cannot validate request body type")
+	return l.Client.PerformRequest("GET", path, params, queryMap)
 }
 
 func parseValidationError(msg string, index string) (err error) {
