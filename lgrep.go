@@ -71,11 +71,38 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 	}
 
 	log.Debug("Submitting search request..")
-	res, err := search.Do()
-	if err != nil {
-		return results, errors.Annotatef(err, "Search returned with error")
+	stream, streamErrs, quit := l.execute(search, source, *spec)
+
+searchStream:
+	for {
+		select {
+		case result, open := <-stream:
+			if result != nil {
+				results = append(results, result)
+			}
+			if !open {
+				break searchStream
+			}
+		case err := <-streamErrs:
+			if err != nil {
+				// Exit on any errors
+				ack := make(chan struct{})
+				quit <- &ack
+				timeout := time.NewTimer(time.Second * 3)
+				// Wait for the search to cleanup
+				select {
+				case <-ack:
+					break
+				case <-timeout.C:
+					timeout.Stop()
+					log.Warn("Timed out shutting down search query")
+				}
+				return results, errors.Annotatef(err, "Search returned with error")
+			}
+		}
 	}
-	return consumeResults(res, spec)
+
+	return results, nil
 }
 
 // SearchWithSource may be used to provide a pre-contstructed json
@@ -124,47 +151,106 @@ func (l LGrep) SearchWithSource(raw interface{}, spec *SearchOptions) (results [
 	if err != nil {
 		return results, errors.Annotatef(err, "Search returned with error")
 	}
-	return consumeResults(res, spec)
+	return consumeResults(res, *spec)
 }
 
 // execute runs the search and accomodates any necessary work to
 // ensure the search is executed properly.
-func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec SearchOptions) (results chan Result, streamErr chan error) {
-	results = make(chan Result, 100)
+func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec SearchOptions) (results chan Result, streamErr chan error, quit chan *chan struct{}) {
+	results = make(chan Result, 93)
 	streamErr = make(chan error, 1)
+	quit = make(chan *chan struct{}, 1)
 
-	var service Searcher = search
+	var (
+		service Searcher = search
+		scroll  *elastic.ScrollService
+	)
 
 	if spec.Size > 10000 {
-		scroll := l.Scroll()
+		scroll = l.Scroll()
 		spec.configureScroll(scroll)
 		scroll.Query(query)
 		service = scroll
 	}
 
 	go func() {
-		_, err := service.Do()
-		if err != nil {
-			streamErr <- err
-			return
+		defer close(results)
+		defer close(streamErr)
+		var (
+			scrolls []string
+		)
+
+	searchLoop:
+		for {
+			result, err := service.Do()
+			if err != nil {
+				// End of the scroll
+				if err == elastic.EOS {
+					break
+				}
+				// Any other error
+				streamErr <- err
+				break
+			}
+
+			for i := range result.Hits.Hits {
+				select {
+				case ack := <-quit:
+					defer func() { *ack <- struct{}{} }()
+					break searchLoop
+				default:
+					result, err := extractResult(result.Hits.Hits[i], spec)
+					if err != nil {
+						streamErr <- err
+					}
+					results <- result
+				}
+			}
+
+			// Gotta scroll!
+			if scroll != nil {
+				scrolls = append(scrolls, result.ScrollId)
+				scroll.ScrollId(scrolls[len(scrolls)-1])
+			} else {
+				break searchLoop
+			}
 		}
+
+		if len(scrolls) != 0 {
+			log.Debugf("Cleaning up %d scrolls", len(scrolls))
+			// Clean up used scrolls
+			_, err := l.ClearScroll(scrolls...).Do()
+			if err != nil {
+				log.Debug("Error cleaning up scroll, they'll expire")
+				streamErr <- err
+			}
+		}
+		log.Debug("Exiting execute streamer")
 	}()
-	return results, streamErr
+
+	return results, streamErr, quit
 }
 
-// consumeResultpps ingests the results from the returned data and
+//
+func extractResult(hit *elastic.SearchHit, spec SearchOptions) (result Result, err error) {
+	if len(spec.Fields) != 0 && len(hit.Fields) != 0 {
+		return FieldResult(hit.Fields), nil
+	}
+	if hit == nil || hit.Source == nil {
+		return nil, errors.New("nil document returned")
+	}
+	return SourceResult(*hit.Source), nil
+}
+
+// consumeResults ingests the results from the returned data and
 // transforms them into Result's.
-func consumeResults(res *elastic.SearchResult, spec *SearchOptions) (results []Result, err error) {
+func consumeResults(res *elastic.SearchResult, spec SearchOptions) (results []Result, err error) {
 	for _, doc := range res.Hits.Hits {
-		// Extract the fields that were returned
-		if len(spec.Fields) != 0 && len(doc.Fields) != 0 {
-			results = append(results, FieldResult(doc.Fields))
-			continue
+		result, err := extractResult(doc, spec)
+		if err != nil {
+			return results, err
 		}
-		if doc == nil || doc.Source == nil {
-			return results, errors.New("nil document returned")
-		}
-		results = append(results, SourceResult(*doc.Source))
+		results = append(results, result)
 	}
 	return results, nil
 }
