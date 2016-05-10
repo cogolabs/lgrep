@@ -12,6 +12,14 @@ import (
 var (
 	// unvalidatableKeys removes keys that cannot be validated via the API.
 	unvalidatableKeys = []string{"_source", "size"}
+	// ErrInvalidQuery indicates that the provided query was not
+	// validated by Elasticsearch.
+	ErrInvalidQuery = errors.New("Invalid search query")
+	// ErrInvalidQuery indicates that the provided query was not
+	// validated by Elasticsearch.
+	ErrInvalidLuceneSyntax = errors.New("Invalid Lucene syntax - see http://localhost/goto/syntax")
+	// ErrInvalidIndex indicates that a query was attempted on a non-existent index or index pattern.
+	ErrInvalidIndex = errors.New("Invalid query on unknown index")
 )
 
 // ValidationResponse is the Elasticsearch validation result payload.
@@ -97,7 +105,6 @@ func (l LGrep) validateBody(query interface{}, spec SearchOptions) (response *el
 	for _, key := range unvalidatableKeys {
 		delete(queryMap, key)
 	}
-	log.Warnf("%#v", queryMap)
 
 	params.Set("explain", "true")
 	log.Debugf("Validating query at '%s?%s'", path, params.Encode())

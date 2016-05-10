@@ -15,14 +15,6 @@ import (
 var (
 	// ErrEmptySearch is returned when an empty query is given.
 	ErrEmptySearch = errors.New("Empty search query, not submitting.")
-	// ErrInvalidQuery indicates that the provided query was not
-	// validated by Elasticsearch.
-	ErrInvalidQuery = errors.New("Invalid search query")
-	// ErrInvalidQuery indicates that the provided query was not
-	// validated by Elasticsearch.
-	ErrInvalidLuceneSyntax = errors.New("Invalid Lucene syntax - http://localhost/goto/syntax")
-	// ErrInvalidIndex indicates that a query was attempted on a non-existent index or index pattern.
-	ErrInvalidIndex = errors.New("Invalid query on unknown index")
 	// DefaultSpec provides a reasonable default search specification.
 	DefaultSpec = SearchOptions{Size: 100, SortTime: SortDesc}
 )
