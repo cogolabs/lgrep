@@ -62,6 +62,7 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 		}
 		printQueryDebug(os.Stderr, query)
 	}
+
 	if !spec.QuerySkipValidate {
 		_, err := l.validate(source, *spec)
 		if err != nil {
@@ -108,6 +109,13 @@ func (l LGrep) SearchWithSource(query interface{}, spec *SearchOptions) (results
 
 	if spec.QueryDebug {
 		printQueryDebug(os.Stderr, query)
+	}
+
+	if !spec.QuerySkipValidate {
+		_, err := l.validate(query, *spec)
+		if err != nil {
+			return results, err
+		}
 	}
 
 	log.Debug("Submitting search request..")
