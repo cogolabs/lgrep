@@ -47,6 +47,39 @@ func (s SearchStream) Quit() {
 	s.control.stopped = true
 }
 
+// streamAll executes the search and streams the entirety of the
+// result and handles any errors from the execution.
+func (l LGrep) streamAll(search *elastic.SearchService, source elastic.Query, spec *SearchOptions) (results []Result, err error) {
+	stream, err := l.execute(search, source, *spec)
+	if err != nil {
+		return results, err
+	}
+
+stream:
+	for {
+		select {
+		case streamErr, ok := <-stream.Errors:
+			if streamErr == nil && !ok {
+				continue
+			}
+			log.Debug("Error encountered, stopping any ongoing search")
+			err = streamErr
+			stream.Quit()
+			break stream
+
+		case result, ok := <-stream.Results:
+			if result == nil && !ok {
+				break stream
+			}
+			results = append(results, result)
+		}
+	}
+	log.Debug("Waiting for stream to clean up")
+	stream.Wait()
+
+	return results, err
+}
+
 // execute runs the search and accomodates any necessary work to
 // ensure the search is executed properly.
 func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec SearchOptions) (stream *SearchStream, err error) {

@@ -73,34 +73,7 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 		}
 	}
 
-	stream, err := l.execute(search, source, *spec)
-	if err != nil {
-		return results, err
-	}
-
-stream:
-	for {
-		select {
-		case streamErr, ok := <-stream.Errors:
-			if streamErr == nil && !ok {
-				continue
-			}
-			log.Debug("Error encountered, stopping any ongoing search")
-			err = streamErr
-			stream.Quit()
-			break stream
-
-		case result, ok := <-stream.Results:
-			if result == nil && !ok {
-				break stream
-			}
-			results = append(results, result)
-		}
-	}
-	log.Debug("Waiting for stream to clean up")
-	stream.Wait()
-
-	return results, err
+	return l.streamAll(search, source, spec)
 }
 
 // SearchWithSource may be used to provide a pre-contstructed json
@@ -144,12 +117,7 @@ func (l LGrep) SearchWithSource(raw interface{}, spec *SearchOptions) (results [
 		}
 	}
 
-	log.Debug("Submitting search request..")
-	res, err := search.Do()
-	if err != nil {
-		return results, errors.Annotatef(err, "Search returned with error")
-	}
-	return consumeResults(res, *spec)
+	return l.streamAll(search, query, spec)
 }
 
 //
