@@ -5,7 +5,12 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/juju/errors"
 	"gopkg.in/olivere/elastic.v3"
+)
+
+const (
+	scrollChunk = 100
 )
 
 type SearchStream struct {
@@ -48,6 +53,9 @@ func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec 
 	stream.control.quit = make(chan struct{}, 1)
 
 	if spec.Size > 10000 {
+		if spec.Index == "" || (spec.Index == "" && len(spec.Indices) == 0) {
+			return nil, errors.New("An index pattern must be given for large requests")
+		}
 		source, err := query.Source()
 		if err != nil {
 			return nil, err
@@ -64,10 +72,11 @@ func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec 
 
 		scroll := l.Scroll()
 		spec.configureScroll(scroll)
+		scroll.Size(scrollChunk)
 		// Must have been patched for `body = query` otherwise the
 		// ScrollService will nest the query further incorrectly.
 		scroll.Query(query)
-		scroll.KeepAlive("1m")
+		scroll.KeepAlive("30s")
 
 		go l.executeScroll(scroll, query, spec, stream)
 	} else {
@@ -82,6 +91,7 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 	var (
 		nextScrollId string
 		lastScrollId string
+		count        int
 	)
 
 	cleanupScroll := func(id string) {
@@ -97,6 +107,7 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 
 	defer cleanupScroll(lastScrollId)
 	defer cleanupScroll(nextScrollId)
+
 	defer close(stream.Results)
 	defer close(stream.Errors)
 
@@ -108,13 +119,19 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 		}
 
 		if nextScrollId != "" {
-			log.Debugf("Preparing this scroll", nextScrollId)
+			log.Debugf("Preparing this scroll %s", nextScrollId[:10])
 			scroll.ScrollId(nextScrollId)
 			lastScrollId = nextScrollId
+			if count >= spec.Size {
+				return
+			}
+		} else {
+			log.Debug("Fetching first page of scroll")
 		}
 
 		results, err := scroll.Do()
 		if err != nil {
+			log.Debug("An error was returned from the scroll")
 			if err != elastic.EOS {
 				stream.Errors <- err
 			}
@@ -125,6 +142,7 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 			nextScrollId = results.ScrollId
 		}
 
+		log.Debug("Streaming results from the scroll")
 		for _, hit := range results.Hits.Hits {
 			result, err := extractResult(hit, spec)
 			if err != nil {
@@ -134,6 +152,10 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 			case <-stream.control.quit:
 				return
 			case stream.Results <- result:
+				count += 1
+			}
+			if count == spec.Size {
+				return
 			}
 		}
 	}
