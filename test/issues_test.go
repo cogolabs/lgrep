@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/cogolabs/lgrep"
-	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -59,13 +58,12 @@ func TestIssue9(t *testing.T) {
 }
 
 func TestIssue11(t *testing.T) {
-	log.SetLevel(log.DebugLevel)
 	tooLargeSize := 10001
 	l, err := lgrep.New(TestEndpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
-	results, err := l.SimpleSearch("*", &lgrep.SearchOptions{Size: tooLargeSize, Fields: []string{"hostname"}})
+	results, err := l.SimpleSearch("*", &lgrep.SearchOptions{Size: tooLargeSize, Index: "journald-*", Fields: []string{"hostname"}})
 	if err != nil {
 		t.Fatalf("Error retrieving %d results: %s", tooLargeSize, err)
 	}
