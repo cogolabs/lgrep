@@ -105,12 +105,10 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 	go func() {
 		stream.control.Add(1)
 		defer stream.control.Done()
-		defer log.Debug("Scrollkeeper exited")
 
 		for {
 			select {
 			case scrollId, ok := <-discardId:
-				log.Debug("Ok: ", ok, "Id: ", len(scrollId))
 				if !ok {
 					return
 				}
@@ -135,7 +133,7 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 scrollLoop:
 	for {
 		if nextScrollId != "" {
-			log.Debugf("Fetching scroll id %s", nextScrollId[:10])
+			log.Debugf("Fetching next page using scroll id %s", nextScrollId[:10])
 			scroll.ScrollId(nextScrollId)
 			if count >= spec.Size {
 				return
@@ -146,7 +144,6 @@ scrollLoop:
 
 		results, err := scroll.Do()
 		if err != nil {
-			discardId <- nextScrollId
 			log.Debug("An error was returned from the scroll")
 			if err != elastic.EOS {
 				stream.Errors <- errors.Annotate(err, "Error scrolling results")
@@ -162,7 +159,6 @@ scrollLoop:
 			}
 		}
 
-		log.Debug("Extracting results")
 		for _, hit := range results.Hits.Hits {
 			result, err := extractResult(hit, spec)
 			if err != nil {
@@ -181,7 +177,9 @@ scrollLoop:
 			}
 		}
 	}
-
+	if nextScrollId != "" {
+		discardId <- nextScrollId
+	}
 	log.Debug("Scroll execution complete, please stream.Wait() for cleanup.")
 }
 
