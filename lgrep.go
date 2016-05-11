@@ -97,6 +97,8 @@ stream:
 			results = append(results, result)
 		}
 	}
+	log.Debug("Waiting for stream to clean up")
+	stream.Wait()
 
 	return results, err
 }
