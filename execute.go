@@ -5,7 +5,12 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/juju/errors"
 	"gopkg.in/olivere/elastic.v3"
+)
+
+const (
+	maxScrollChunk = 999
 )
 
 type SearchStream struct {
@@ -40,7 +45,7 @@ func (s SearchStream) Quit() {
 
 // execute runs the search and accomodates any necessary work to
 // ensure the search is executed properly.
-func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec SearchOptions) (stream *SearchStream) {
+func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec SearchOptions) (stream *SearchStream, err error) {
 	stream = &SearchStream{
 		Results: make(chan Result, 93),
 		Errors:  make(chan error, 1),
@@ -53,18 +58,25 @@ func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec 
 	)
 
 	if spec.Size > 10000 {
+		source, err := query.Source()
+		if err != nil {
+			return nil, err
+		}
+		if queryMap, ok := source.(map[string]interface{}); ok {
+			query = QueryMap(queryMap)
+		}
 		scroll = l.Scroll()
 		spec.configureScroll(scroll)
 		scroll.Query(query)
 		service = scroll
 	}
 
-	go l.executeLoop(service, scroll, spec, stream)
+	go l.executeLoop(service, query, spec, stream)
 
-	return stream
+	return stream, nil
 }
 
-func (l LGrep) executeLoop(service Searcher, scroll *elastic.ScrollService, spec SearchOptions, stream *SearchStream) {
+func (l LGrep) executeLoop(service Searcher, query elastic.Query, spec SearchOptions, stream *SearchStream) {
 	// Start worker
 	stream.control.Add(1)
 
@@ -72,11 +84,42 @@ func (l LGrep) executeLoop(service Searcher, scroll *elastic.ScrollService, spec
 	defer close(stream.Errors)
 
 	var (
-		scrolls []string
+		scrolls   []string
+		remaining = spec.Size
+		current   = 0
 	)
+
+	setQueryChunk := func() {
+		if spec.Size > maxScrollChunk {
+			nextChunk := (remaining - current) % maxScrollChunk
+			if nextChunk == 0 {
+				current = maxScrollChunk
+			} else {
+				current = nextChunk
+			}
+			remaining -= current
+			if queryMap, ok := query.(QueryMap); ok {
+				log.Debugf("This chunk: %d, left: %d", current, remaining)
+				queryMap["size"] = current
+			} else {
+				stream.Errors <- errors.Errorf("Could not set the size on query of type %T", query)
+				stream.control.quit <- struct{}{}
+			}
+		}
+	}
 
 searchLoop:
 	for {
+		setQueryChunk()
+		if current == 0 {
+			log.Debug("Full amount has been fetched")
+			break searchLoop
+		}
+		select {
+		case <-stream.control.quit:
+		default:
+
+		}
 		result, err := service.Do()
 
 		if err != nil {
@@ -103,7 +146,7 @@ searchLoop:
 		}
 
 		// Gotta scroll!
-		if scroll != nil {
+		if scroll, ok := service.(*elastic.ScrollService); ok {
 			scrolls = append(scrolls, result.ScrollId)
 			scroll.ScrollId(scrolls[len(scrolls)-1])
 		} else {

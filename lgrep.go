@@ -73,7 +73,10 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 		}
 	}
 
-	stream := l.execute(search, source, *spec)
+	stream, err := l.execute(search, source, *spec)
+	if err != nil {
+		return results, err
+	}
 
 stream:
 	for {
