@@ -37,7 +37,6 @@ func New(endpoint string) (lg LGrep, err error) {
 // SimpleSearch runs a lucene search configured by the SearchOption
 // specification.
 func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, err error) {
-	log.SetLevel(log.DebugLevel)
 	if q == "" {
 		return results, ErrEmptySearch
 	}
