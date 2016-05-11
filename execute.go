@@ -5,12 +5,7 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/juju/errors"
 	"gopkg.in/olivere/elastic.v3"
-)
-
-const (
-	maxScrollChunk = 999
 )
 
 type SearchStream struct {
@@ -52,118 +47,123 @@ func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec 
 	}
 	stream.control.quit = make(chan struct{}, 1)
 
-	var (
-		service Searcher = search
-		scroll  *elastic.ScrollService
-	)
-
 	if spec.Size > 10000 {
 		source, err := query.Source()
 		if err != nil {
 			return nil, err
 		}
+		// Remove the size key if possible, if its too large (which at
+		// this point it will be if configured by the spec), then the
+		// query will need to have the size key removed as that is a
+		// specification for how many results from each shard.
 		if queryMap, ok := source.(map[string]interface{}); ok {
-			query = QueryMap(queryMap)
+			qm := QueryMap(queryMap)
+			delete(qm, "size")
+			query = qm
 		}
-		scroll = l.Scroll()
+
+		scroll := l.Scroll()
 		spec.configureScroll(scroll)
+		// Must have been patched for `body = query` otherwise the
+		// ScrollService will nest the query further incorrectly.
 		scroll.Query(query)
 		scroll.KeepAlive("1m")
-		service = scroll
-	}
 
-	go l.executeLoop(service, query, spec, stream)
+		go l.executeScroll(scroll, query, spec, stream)
+	} else {
+		go l.executeSearcher(search, query, spec, stream)
+	}
 
 	return stream, nil
 }
 
-func (l LGrep) executeLoop(service Searcher, query elastic.Query, spec SearchOptions, stream *SearchStream) {
+func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query, spec SearchOptions, stream *SearchStream) {
+	stream.control.Add(1)
+	var (
+		nextScrollId string
+		lastScrollId string
+	)
+
+	cleanupScroll := func(id string) {
+		if id != "" {
+			clear := l.Client.ClearScroll(id)
+			_, err := clear.Do()
+			if err != nil {
+				log.Warnf("Could not clear discarded scroll '%s'", id)
+				stream.Errors <- err
+			}
+		}
+	}
+
+	defer cleanupScroll(lastScrollId)
+	defer cleanupScroll(nextScrollId)
+	defer close(stream.Results)
+	defer close(stream.Errors)
+
+	for {
+		if lastScrollId != "" {
+			log.Debugf("Clearing previous scroll '%s'\n", lastScrollId[:10])
+			cleanupScroll(lastScrollId)
+			lastScrollId = ""
+		}
+
+		if nextScrollId != "" {
+			log.Debugf("Preparing this scroll", nextScrollId)
+			scroll.ScrollId(nextScrollId)
+			lastScrollId = nextScrollId
+		}
+
+		results, err := scroll.Do()
+		if err != nil {
+			if err != elastic.EOS {
+				stream.Errors <- err
+			}
+			return
+		}
+
+		if results.ScrollId != "" {
+			nextScrollId = results.ScrollId
+		}
+
+		for _, hit := range results.Hits.Hits {
+			result, err := extractResult(hit, spec)
+			if err != nil {
+				stream.Errors <- err
+			}
+			select {
+			case <-stream.control.quit:
+				return
+			case stream.Results <- result:
+			}
+		}
+	}
+}
+
+func (l LGrep) executeSearcher(service Searcher, query elastic.Query, spec SearchOptions, stream *SearchStream) {
 	// Start worker
 	stream.control.Add(1)
+	defer stream.control.Done()
 
 	defer close(stream.Results)
 	defer close(stream.Errors)
 
-	var (
-		scrolls   []string
-		remaining = spec.Size
-		current   = 0
-	)
+	result, err := service.Do()
 
-	setQueryChunk := func() {
-		if spec.Size > maxScrollChunk {
-			nextChunk := (remaining - current) % maxScrollChunk
-			if nextChunk == 0 {
-				current = maxScrollChunk
-			} else {
-				current = nextChunk
-			}
-			remaining -= current
-			if queryMap, ok := query.(QueryMap); ok {
-				delete(queryMap, "size")
-			} else {
-				stream.Errors <- errors.Errorf("Could not set the size on query of type %T", query)
-				stream.control.quit <- struct{}{}
-			}
-		}
+	if err != nil {
+		stream.Errors <- err
+		return
 	}
 
-searchLoop:
-	for {
-		setQueryChunk()
-		if current == 0 {
-			log.Debug("Full amount has been fetched")
-			break searchLoop
-		}
+	for i := range result.Hits.Hits {
 		select {
 		case <-stream.control.quit:
+			return
 		default:
-
-		}
-		result, err := service.Do()
-
-		if err != nil {
-			// End of the scroll
-			if err == elastic.EOS {
-				break
+			result, err := extractResult(result.Hits.Hits[i], spec)
+			if err != nil {
+				stream.Errors <- err
 			}
-			// Any other error
-			stream.Errors <- err
-			break
-		}
-
-		for i := range result.Hits.Hits {
-			select {
-			case <-stream.control.quit:
-				break searchLoop
-			default:
-				result, err := extractResult(result.Hits.Hits[i], spec)
-				if err != nil {
-					stream.Errors <- err
-				}
-				stream.Results <- result
-			}
-		}
-
-		// Gotta scroll!
-		if scroll, ok := service.(*elastic.ScrollService); ok {
-			scrolls = append(scrolls, result.ScrollId)
-			scroll.ScrollId(scrolls[len(scrolls)-1])
-		} else {
-			break searchLoop
+			stream.Results <- result
 		}
 	}
-
-	if len(scrolls) != 0 {
-		log.Debugf("Cleaning up %d scrolls", len(scrolls))
-		// Clean up used scrolls
-		_, err := l.ClearScroll(scrolls...).Do()
-		if err != nil {
-			log.Debug("Error cleaning up scroll, they'll expire")
-			stream.Errors <- err
-		}
-	}
-
-	// Worker finished
-	stream.control.Done()
 }
