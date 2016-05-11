@@ -37,6 +37,7 @@ func New(endpoint string) (lg LGrep, err error) {
 // SimpleSearch runs a lucene search configured by the SearchOption
 // specification.
 func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, err error) {
+	log.SetLevel(log.DebugLevel)
 	if q == "" {
 		return results, ErrEmptySearch
 	}
@@ -52,6 +53,7 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 	} else {
 		spec = &DefaultSpec
 	}
+
 	spec.configureSearch(search)
 
 	// Spit out the query that will be sent.
@@ -64,45 +66,36 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 	}
 
 	if !spec.QuerySkipValidate {
+		log.Debug("Validating query..")
 		_, err := l.validate(source, *spec)
 		if err != nil {
 			return results, err
 		}
 	}
 
-	log.Debug("Submitting search request..")
-	stream, streamErrs, quit := l.execute(search, source, *spec)
+	stream := l.execute(search, source, *spec)
 
-searchStream:
+stream:
 	for {
 		select {
-		case result, open := <-stream:
-			if result != nil {
-				results = append(results, result)
+		case streamErr, ok := <-stream.Errors:
+			if streamErr == nil && !ok {
+				continue
 			}
-			if !open {
-				break searchStream
+			log.Debug("Error encountered, stopping any ongoing search")
+			err = streamErr
+			stream.Quit()
+			break stream
+
+		case result, ok := <-stream.Results:
+			if result == nil && !ok {
+				break stream
 			}
-		case err := <-streamErrs:
-			if err != nil {
-				// Exit on any errors
-				ack := make(chan struct{})
-				quit <- &ack
-				timeout := time.NewTimer(time.Second * 3)
-				// Wait for the search to cleanup
-				select {
-				case <-ack:
-					break
-				case <-timeout.C:
-					timeout.Stop()
-					log.Warn("Timed out shutting down search query")
-				}
-				return results, errors.Annotatef(err, "Search returned with error")
-			}
+			results = append(results, result)
 		}
 	}
 
-	return results, nil
+	return results, err
 }
 
 // SearchWithSource may be used to provide a pre-contstructed json
@@ -152,83 +145,6 @@ func (l LGrep) SearchWithSource(raw interface{}, spec *SearchOptions) (results [
 		return results, errors.Annotatef(err, "Search returned with error")
 	}
 	return consumeResults(res, *spec)
-}
-
-// execute runs the search and accomodates any necessary work to
-// ensure the search is executed properly.
-func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec SearchOptions) (results chan Result, streamErr chan error, quit chan *chan struct{}) {
-	results = make(chan Result, 93)
-	streamErr = make(chan error, 1)
-	quit = make(chan *chan struct{}, 1)
-
-	var (
-		service Searcher = search
-		scroll  *elastic.ScrollService
-	)
-
-	if spec.Size > 10000 {
-		scroll = l.Scroll()
-		spec.configureScroll(scroll)
-		scroll.Query(query)
-		service = scroll
-	}
-
-	go func() {
-		defer close(results)
-		defer close(streamErr)
-		var (
-			scrolls []string
-		)
-
-	searchLoop:
-		for {
-			result, err := service.Do()
-			if err != nil {
-				// End of the scroll
-				if err == elastic.EOS {
-					break
-				}
-				// Any other error
-				streamErr <- err
-				break
-			}
-
-			for i := range result.Hits.Hits {
-				select {
-				case ack := <-quit:
-					defer func() { *ack <- struct{}{} }()
-					break searchLoop
-				default:
-					result, err := extractResult(result.Hits.Hits[i], spec)
-					if err != nil {
-						streamErr <- err
-					}
-					results <- result
-				}
-			}
-
-			// Gotta scroll!
-			if scroll != nil {
-				scrolls = append(scrolls, result.ScrollId)
-				scroll.ScrollId(scrolls[len(scrolls)-1])
-			} else {
-				break searchLoop
-			}
-		}
-
-		if len(scrolls) != 0 {
-			log.Debugf("Cleaning up %d scrolls", len(scrolls))
-			// Clean up used scrolls
-			_, err := l.ClearScroll(scrolls...).Do()
-			if err != nil {
-				log.Debug("Error cleaning up scroll, they'll expire")
-				streamErr <- err
-			}
-		}
-		log.Debug("Exiting execute streamer")
-	}()
-
-	return results, streamErr, quit
 }
 
 //

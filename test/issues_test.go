@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/cogolabs/lgrep"
+	log "github.com/Sirupsen/logrus"
 )
 
 const (
@@ -58,6 +59,7 @@ func TestIssue9(t *testing.T) {
 }
 
 func TestIssue11(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
 	tooLargeSize := 10001
 	l, err := lgrep.New(TestEndpoint)
 	if err != nil {
