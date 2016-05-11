@@ -118,7 +118,7 @@ given: { "timestamp": "2016-04-29T13:58:59.420Z" }
 
 func dumpFlags(c *cli.Context) (err error) {
 	for _, f := range c.GlobalFlagNames() {
-		fmt.Printf("%s = %s\n", f, c.Generic(f))
+		fmt.Fprintf(os.Stderr, "%s = %s\n", f, c.Generic(f))
 	}
 	return nil
 }
@@ -135,9 +135,9 @@ func RunPrepareApp(c *cli.Context) (err error) {
 			return cli.NewExitError("Error during release check, check yourself please", 2)
 		}
 		if update != nil {
-			fmt.Printf("There's an update available! See %s\n", update.URL)
+			fmt.Fprintf(os.Stderr, "There's an update available! See %s\n", update.URL)
 		} else {
-			fmt.Println("lgrep is up to date")
+			fmt.Fprintln(os.Stderr, "lgrep is up to date")
 		}
 		os.Exit(0)
 	}
@@ -159,6 +159,7 @@ func RunPrepareApp(c *cli.Context) (err error) {
 
 	if c.Bool("debug") {
 		log.SetLevel(log.DebugLevel)
+		log.Debug("Using debug level logging")
 		c.Set("query-debug", "true")
 		dumpFlags(c)
 	}
@@ -219,7 +220,7 @@ func (c Config) search() (results []lgrep.Result, err error) {
 		Fields:     c.queryFields,
 	}
 	if c.debug {
-		fmt.Printf("q> SearchOptions: %#+v\n", spec)
+		fmt.Fprintf(os.Stderr, "q> SearchOptions: %#+v\n", spec)
 	}
 
 	if c.queryFile != "" {
