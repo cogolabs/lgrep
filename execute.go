@@ -68,6 +68,7 @@ func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec 
 		scroll = l.Scroll()
 		spec.configureScroll(scroll)
 		scroll.Query(query)
+		scroll.KeepAlive("1m")
 		service = scroll
 	}
 
@@ -99,8 +100,7 @@ func (l LGrep) executeLoop(service Searcher, query elastic.Query, spec SearchOpt
 			}
 			remaining -= current
 			if queryMap, ok := query.(QueryMap); ok {
-				log.Debugf("This chunk: %d, left: %d", current, remaining)
-				queryMap["size"] = current
+				delete(queryMap, "size")
 			} else {
 				stream.Errors <- errors.Errorf("Could not set the size on query of type %T", query)
 				stream.control.quit <- struct{}{}

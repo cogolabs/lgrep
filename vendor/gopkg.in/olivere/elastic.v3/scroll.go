@@ -143,14 +143,9 @@ func (s *ScrollService) GetFirstPage() (*SearchResult, error) {
 		params.Set("size", fmt.Sprintf("%d", *s.size))
 	}
 
-	// Set body
-	body := make(map[string]interface{})
-	if s.query != nil {
-		src, err := s.query.Source()
-		if err != nil {
-			return nil, err
-		}
-		body["query"] = src
+	body, err := s.query.Source()
+	if err != nil {
+		return nil, err
 	}
 
 	// Get response
