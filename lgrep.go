@@ -15,6 +15,8 @@ import (
 var (
 	// ErrEmptySearch is returned when an empty query is given.
 	ErrEmptySearch = errors.New("Empty search query, not submitting.")
+	// ErrZeroSize is returned when a query is made with a Size spec of 0.
+	ErrZeroSize = errors.New("Search was for a 0 size, not executing.")
 	// DefaultSpec provides a reasonable default search specification.
 	DefaultSpec = SearchOptions{Size: 100, SortTime: SortDesc}
 )
@@ -34,20 +36,18 @@ func New(endpoint string) (lg LGrep, err error) {
 	return lg, err
 }
 
-// SimpleSearch runs a lucene search configured by the SearchOption
-// specification.
-func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, err error) {
+// SimpleSearchStream configures and executes a search stream using a lucene query.
+func (l LGrep) SimpleSearchStream(q string, spec *SearchOptions) (stream *SearchStream, err error) {
 	if q == "" {
-		return results, ErrEmptySearch
+		return nil, ErrEmptySearch
 	}
-	results = make([]Result, 0)
 	search, source := l.NewSearch()
 	search = SearchWithLucene(search, q)
 	if spec != nil {
 		// If user wants 0 then they're really not looking to get any
 		// results, don't execute.
 		if spec.Size == 0 {
-			return results, err
+			return nil, ErrZeroSize
 		}
 	} else {
 		spec = &DefaultSpec
@@ -68,25 +68,32 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 		log.Debug("Validating query..")
 		_, err := l.validate(source, *spec)
 		if err != nil {
-			return results, err
+			return nil, err
 		}
 	}
 
-	return l.streamAll(search, source, spec)
+	return l.execute(search, source, *spec)
 }
 
-// SearchWithSource may be used to provide a pre-contstructed json
-// query body when a query cannot easily be formed with the available
-// methods. The applied SearchOptions specification *is not fully
-// compatible* with a manually crafted query body but some options are
-// - see SearchOptions for any caveats.
-func (l LGrep) SearchWithSource(raw interface{}, spec *SearchOptions) (results []Result, err error) {
+// SimpleSearch runs a lucene search configured by the SearchOption
+// specification.
+func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, err error) {
+	stream, err := l.SimpleSearchStream(q, spec)
+	if err != nil {
+		return results, err
+	}
+	return stream.All()
+}
+
+// SearchWithSourceStream configures with a raw query and executes a
+// search stream that can be read.
+func (l LGrep) SearchWithSourceStream(raw interface{}, spec *SearchOptions) (stream *SearchStream, err error) {
 	search, _ := l.NewSearch()
 	if spec != nil {
 		// If user wants 0 then they're really not looking to get any
 		// results, don't execute.
 		if spec.Size == 0 {
-			return results, err
+			return nil, ErrZeroSize
 		}
 	} else {
 		spec = &DefaultSpec
@@ -112,11 +119,24 @@ func (l LGrep) SearchWithSource(raw interface{}, spec *SearchOptions) (results [
 	if !spec.QuerySkipValidate {
 		_, err := l.validate(query, *spec)
 		if err != nil {
-			return results, err
+			return nil, err
 		}
 	}
 
-	return l.streamAll(search, query, spec)
+	return l.execute(search, query, *spec)
+}
+
+// SearchWithSource may be used to provide a pre-contstructed json
+// query body when a query cannot easily be formed with the available
+// methods. The applied SearchOptions specification *is not fully
+// compatible* with a manually crafted query body but some options are
+// - see SearchOptions for any caveats.
+func (l LGrep) SearchWithSource(raw interface{}, spec *SearchOptions) (results []Result, err error) {
+	stream, err := l.SearchWithSourceStream(raw, spec)
+	if err != nil {
+		return results, err
+	}
+	return stream.All()
 }
 
 //
