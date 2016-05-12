@@ -37,7 +37,7 @@ type SearchStream struct {
 // Wait ensures that the stream has cleaned up after reading all of
 // the stream, this should be called after reading the stream in its
 // entirety.
-func (s SearchStream) Wait() {
+func (s *SearchStream) Wait() {
 	s.control.Lock()
 	defer s.control.Unlock()
 
@@ -46,7 +46,7 @@ func (s SearchStream) Wait() {
 
 // Quit instructs the stream to close down cleanly early blocking
 // until that happens, this function is safe to call several times.
-func (s SearchStream) Quit() {
+func (s *SearchStream) Quit() {
 	log.Debug("Sending stream quit signal")
 	s.control.Lock()
 	defer s.control.Unlock()
@@ -67,7 +67,7 @@ func (s SearchStream) Quit() {
 // All reads the entire stream into memory and returns the results
 // that were read, this exits immediately on any error that is
 // encountered.
-func (s SearchStream) All() (results []Result, err error) {
+func (s *SearchStream) All() (results []Result, err error) {
 	resultFn := func(r Result) error {
 		results = append(results, r)
 		return nil
@@ -81,7 +81,7 @@ func (s SearchStream) All() (results []Result, err error) {
 // channel, resultFn and errFn are called when messages are read from
 // their respective messages are received. If errFn or resultFn
 // returns an error, the stream is shutdown.
-func (s SearchStream) Each(resultFn func(Result) error, errFn func(error) error) (err error) {
+func (s *SearchStream) Each(resultFn func(Result) error, errFn func(error) error) (err error) {
 stream:
 	for {
 		select {
