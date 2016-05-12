@@ -150,7 +150,7 @@ func RunPrepareApp(c *cli.Context) (err error) {
 
 	// Set the format to the stdline format if asked, and warn when
 	// they're both set.
-	if c.Bool("stdline") {
+	if c.Bool("format-stdline") {
 		if c.IsSet("format") {
 			log.Warn("You've provided a format (-f) and asked for the stdline format (-ff), using stdline!")
 		}
