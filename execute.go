@@ -13,7 +13,7 @@ const (
 	// MaxSearchSize is the maximum search size that is able to be
 	// performed before the search will necessitate a scroll.
 	MaxSearchSize = 10000
-	scrollChunk   = 300
+	scrollChunk   = 100
 )
 
 // SearchStream is a stream of results that manages the execution and
@@ -120,10 +120,13 @@ func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec 
 		Results: make(chan Result, 93),
 		Errors:  make(chan error, 1),
 	}
+	if spec.QueryDebug {
+		log.SetLevel(log.DebugLevel)
+	}
 	stream.control.quit = make(chan struct{}, 1)
 	stream.control.WaitGroup = &sync.WaitGroup{}
 
-	if spec.Size > 10000 {
+	if spec.Size > MaxSearchSize {
 		if spec.Index == "" || (spec.Index == "" && len(spec.Indices) == 0) {
 			return nil, errors.New("An index pattern must be given for large requests")
 		}
@@ -143,6 +146,9 @@ func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec 
 
 		scroll := l.Scroll()
 		spec.configureScroll(scroll)
+		if scrollChunk <= 0 {
+			log.Fatal("YOU WILL DESTROY LOGSTASH, ABORTING.")
+		}
 		scroll.Size(scrollChunk)
 		// Must have been patched for `body = query` otherwise the
 		// ScrollService will nest the query further incorrectly.
@@ -164,7 +170,7 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 	var (
 		nextScrollID string
 		discardID    chan string
-		count        int
+		resultCount  int
 	)
 	discardID = make(chan string, 5)
 
@@ -173,22 +179,26 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 		defer stream.control.Done()
 		defer log.Debug("Scroll cleaner stopped")
 
+		var scrolls []string
+
+	receive:
 		for {
 			select {
 			case scrollID, ok := <-discardID:
 				if !ok {
-					return
+					break receive
 				}
 				if scrollID == "" {
 					continue
 				}
-				log.Debugf("Clearing scroll id: %s", scrollID[:10])
-				clear := l.Client.ClearScroll(scrollID)
-				_, err := clear.Do()
-				if err != nil {
-					log.Warnf("Error clearing scroll %s.", scrollID[:10])
-				}
+				scrolls = append(scrolls, scrollID)
 			}
+		}
+		log.Debugf("Clearing %d scrolls", len(scrolls))
+		clear := l.Client.ClearScroll(scrolls...)
+		_, err := clear.Do()
+		if err != nil {
+			log.Warnf("Error clearing scrolls.")
 		}
 	}()
 
@@ -199,10 +209,10 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 scrollLoop:
 	for {
 		if nextScrollID != "" {
-			log.Debugf("Fetching next page using scroll id %s", nextScrollID[:10])
+			log.Debugf("Fetching next page using scrollID %s", nextScrollID[:10])
 			scroll.ScrollId(nextScrollID)
-			if count >= spec.Size {
-				return
+			if resultCount >= spec.Size {
+				break scrollLoop
 			}
 		} else {
 			log.Debug("Fetching first page of scroll")
@@ -210,18 +220,18 @@ scrollLoop:
 
 		results, err := scroll.Do()
 		if err != nil {
-			log.Debugf("An error was returned from the scroll after %d results read", count)
+			log.Debugf("An error was returned during scroll after %d results.", resultCount)
 			if err != elastic.EOS {
-				stream.Errors <- errors.Annotate(err, "Error scrolling results")
+				stream.Errors <- errors.Annotate(err, "Server responded with error while scrolling.")
 			}
 			break scrollLoop
 		}
 
 		if results.ScrollId != "" {
 			if results.ScrollId != nextScrollID {
-				log.Debug("More results at scrollId: ", results.ScrollId[:10])
 				discardID <- nextScrollID
 				nextScrollID = results.ScrollId
+				log.Debugf("New scrollID returned: %s", nextScrollID[:10])
 			}
 		}
 
@@ -235,9 +245,9 @@ scrollLoop:
 				log.Debug("Stream instructed to quit")
 				break scrollLoop
 			case stream.Results <- result:
-				count++
+				resultCount++
 			}
-			if count == spec.Size {
+			if resultCount == spec.Size {
 				log.Debug("Scroll streamed the required amount of results, begin shutdown")
 				break scrollLoop
 			}
