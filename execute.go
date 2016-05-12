@@ -208,7 +208,7 @@ scrollLoop:
 
 		results, err := scroll.Do()
 		if err != nil {
-			log.Debug("An error was returned from the scroll")
+			log.Debugf("An error was returned from the scroll after %d results read", count)
 			if err != elastic.EOS {
 				stream.Errors <- errors.Annotate(err, "Error scrolling results")
 			}
