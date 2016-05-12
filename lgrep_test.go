@@ -156,7 +156,7 @@ func TestValidateQuery(t *testing.T) {
 				if i != 0 && ex.Error != nil {
 					last := result.Explanations[i-1]
 					if ex.Error.Error() == last.Error.Error() {
-						repeat += 1
+						repeat++
 						if i == len(result.Explanations)-1 {
 							t.Logf("\tAbove message repeated %d times for different indices.", repeat)
 						}
@@ -199,7 +199,7 @@ func TestValidateQuery(t *testing.T) {
 				t.Errorf("Query %s was expected to be valid: %s", testcase.desc, err)
 				explain()
 			} else {
-				t.Error("Invalid query error for valid query: %s", err)
+				t.Errorf("Invalid query error for valid query: %s", err)
 				explain()
 			}
 			continue

@@ -15,8 +15,8 @@ var (
 	// ErrInvalidQuery indicates that the provided query was not
 	// validated by Elasticsearch.
 	ErrInvalidQuery = errors.New("Invalid search query")
-	// ErrInvalidQuery indicates that the provided query was not
-	// validated by Elasticsearch.
+	// ErrInvalidLuceneSyntax indicates that the provided lucene query
+	// could not be parsed by Elasticsearch.
 	ErrInvalidLuceneSyntax = errors.New("Invalid Lucene syntax - see http://localhost/goto/syntax")
 	// ErrInvalidIndex indicates that a query was attempted on a non-existent index or index pattern.
 	ErrInvalidIndex = errors.New("Invalid query on unknown index")

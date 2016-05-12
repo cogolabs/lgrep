@@ -27,6 +27,8 @@ type Searcher interface {
 // satisfies the elastic.Query interface.
 type QueryMap map[string]interface{}
 
+// Source returns the raw source of the query itself - see
+// elastic.Query interface.
 func (q QueryMap) Source() (interface{}, error) {
 	return q, nil
 }

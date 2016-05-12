@@ -13,10 +13,16 @@ const (
 	scrollChunk = 300
 )
 
+// SearchStream is a stream of results that manages the execution and
+// consumption of that stream.
 type SearchStream struct {
+	// Results is a channel of results that are read from the server.
 	Results chan Result
-	Errors  chan error
+	// Errors is a channel of errors that are encountered.
+	Errors chan error
 
+	// control holds internal variables that are used to control the
+	// stream workers.
 	control struct {
 		*sync.WaitGroup
 		sync.Mutex
@@ -25,10 +31,18 @@ type SearchStream struct {
 	}
 }
 
+// Wait ensures that the stream has cleaned up after reading all of
+// the stream, this should be called after reading the stream in its
+// entirety.
 func (s SearchStream) Wait() {
+	s.control.Lock()
+	defer s.control.Unlock()
+
 	s.control.Wait()
 }
 
+// Quit instructs the stream to close down cleanly early blocking
+// until that happens, this function is safe to call several times.
 func (s SearchStream) Quit() {
 	log.Debug("Sending stream quit signal")
 	s.control.Lock()
@@ -76,7 +90,7 @@ stream:
 	return results, err
 }
 
-// execute runs the search and accomodates any necessary work to
+// execute runs the search and accommodates any necessary work to
 // ensure the search is executed properly.
 func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec SearchOptions) (stream *SearchStream, err error) {
 	stream = &SearchStream{
@@ -125,11 +139,11 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 	defer stream.control.Done()
 
 	var (
-		nextScrollId string
-		discardId    chan string
+		nextScrollID string
+		discardID    chan string
 		count        int
 	)
-	discardId = make(chan string, 5)
+	discardID = make(chan string, 5)
 
 	go func() {
 		stream.control.Add(1)
@@ -137,7 +151,7 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 
 		for {
 			select {
-			case scrollId, ok := <-discardId:
+			case scrollId, ok := <-discardID:
 				if !ok {
 					return
 				}
@@ -157,13 +171,13 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 
 	defer close(stream.Results)
 	defer close(stream.Errors)
-	defer close(discardId)
+	defer close(discardID)
 
 scrollLoop:
 	for {
-		if nextScrollId != "" {
-			log.Debugf("Fetching next page using scroll id %s", nextScrollId[:10])
-			scroll.ScrollId(nextScrollId)
+		if nextScrollID != "" {
+			log.Debugf("Fetching next page using scroll id %s", nextScrollID[:10])
+			scroll.ScrollId(nextScrollID)
 			if count >= spec.Size {
 				return
 			}
@@ -181,10 +195,10 @@ scrollLoop:
 		}
 
 		if results.ScrollId != "" {
-			if results.ScrollId != nextScrollId {
+			if results.ScrollId != nextScrollID {
 				log.Debug("More results at scrollId: ", results.ScrollId[:10])
-				discardId <- nextScrollId
-				nextScrollId = results.ScrollId
+				discardID <- nextScrollID
+				nextScrollID = results.ScrollId
 			}
 		}
 
@@ -198,7 +212,7 @@ scrollLoop:
 				log.Debug("Stream instructed to quit")
 				break scrollLoop
 			case stream.Results <- result:
-				count += 1
+				count++
 			}
 			if count == spec.Size {
 				log.Debug("Scroll streamed the required amount of results, begin shutdown")
@@ -206,8 +220,8 @@ scrollLoop:
 			}
 		}
 	}
-	if nextScrollId != "" {
-		discardId <- nextScrollId
+	if nextScrollID != "" {
+		discardID <- nextScrollID
 	}
 	log.Debug("Scroll execution complete, please stream.Wait() for cleanup.")
 }
