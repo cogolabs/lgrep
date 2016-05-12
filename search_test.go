@@ -6,9 +6,9 @@ import (
 
 func TestBuildURL(t *testing.T) {
 	expectations := map[string]SearchOptions{
-		"/_validate/query":                     SearchOptions{},
-		"/journald-2016.05.08/_validate/query": SearchOptions{Index: "journald-2016.05.08"},
-		"/_all/journald/_validate/query":       SearchOptions{Type: "journald"},
+		"/_validate/query":                     {},
+		"/journald-2016.05.08/_validate/query": {Index: "journald-2016.05.08"},
+		"/_all/journald/_validate/query":       {Type: "journald"},
 	}
 
 	for expect, spec := range expectations {

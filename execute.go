@@ -10,6 +10,8 @@ import (
 )
 
 const (
+	// MaxSearchSize is the maximum search size that is able to be
+	// performed before the search will necessitate a scroll.
 	MaxSearchSize = 10000
 	scrollChunk   = 300
 )
@@ -62,7 +64,7 @@ func (s SearchStream) Quit() {
 	s.control.stopped = true
 }
 
-// Results reads the entire stream into memory and returns the results
+// All reads the entire stream into memory and returns the results
 // that were read, this exits immediately on any error that is
 // encountered.
 func (s SearchStream) All() (results []Result, err error) {
@@ -77,7 +79,7 @@ func (s SearchStream) All() (results []Result, err error) {
 
 // Each executes a function with each result that is read from the
 // channel, resultFn and errFn are called when messages are read from
-// their respective messages are recieved. If errFn or resultFn
+// their respective messages are received. If errFn or resultFn
 // returns an error, the stream is shutdown.
 func (s SearchStream) Each(resultFn func(Result) error, errFn func(error) error) (err error) {
 stream:
@@ -169,25 +171,25 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 	go func() {
 		stream.control.Add(1)
 		defer stream.control.Done()
+		defer log.Debug("Scroll cleaner stopped")
 
 		for {
 			select {
-			case scrollId, ok := <-discardID:
+			case scrollID, ok := <-discardID:
 				if !ok {
 					return
 				}
-				if scrollId == "" {
+				if scrollID == "" {
 					continue
 				}
-				log.Debugf("Clearing scroll id: %s", scrollId[:10])
-				clear := l.Client.ClearScroll(scrollId)
+				log.Debugf("Clearing scroll id: %s", scrollID[:10])
+				clear := l.Client.ClearScroll(scrollID)
 				_, err := clear.Do()
 				if err != nil {
-					log.Warnf("Error clearing scroll %s.", scrollId[:10])
+					log.Warnf("Error clearing scroll %s.", scrollID[:10])
 				}
 			}
 		}
-		log.Debug("Scroll keeper closing down")
 	}()
 
 	defer close(stream.Results)

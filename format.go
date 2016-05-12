@@ -15,7 +15,9 @@ import (
 
 const (
 	normalTSField = "timestamp"
-	FormatRaw     = "{{.}}"
+	// FormatRaw can be used to force results to be returned as JSON
+	// output instead of templating.
+	FormatRaw = "{{.}}"
 )
 
 var (
