@@ -205,11 +205,11 @@ type Config struct {
 }
 
 // Run the user's configured search
-func (c Config) search() (results []lgrep.Result, err error) {
+func (c Config) searchStream() (stream *lgrep.SearchStream, err error) {
 	l, err := lgrep.New(c.endpoint)
 	if err != nil {
 		log.Error(err)
-		return results, err
+		return stream, err
 	}
 
 	spec := &lgrep.SearchOptions{
@@ -230,36 +230,33 @@ func (c Config) search() (results []lgrep.Result, err error) {
 		)
 		f, err = os.Open(c.queryFile)
 		if err != nil {
-			return results, errors.Annotate(err, "Could not open the provided query file")
+			return stream, errors.Annotate(err, "Could not open the provided query file")
 		}
 		d, err = ioutil.ReadAll(f)
 		if err != nil {
-			return results, errors.Annotate(err, "Could not read the provided query file")
+			return stream, errors.Annotate(err, "Could not read the provided query file")
 		}
-		results, err = l.SearchWithSource(json.RawMessage(d), spec)
+		stream, err = l.SearchWithSourceStream(json.RawMessage(d), spec)
 	}
 
 	if c.query != "" {
-		results, err = l.SimpleSearch(c.query, spec)
+		stream, err = l.SimpleSearchStream(c.query, spec)
 	}
 
-	return results, err
+	return stream, err
 }
 
-// Format and print the results according to config to the specified
-// out.
-func (c Config) format(results []lgrep.Result, out io.Writer) error {
+// formatter returns a function that writes a formatted result to `out`.
+func (c Config) formatter(out io.Writer) (f func(lgrep.Result) error, err error) {
 	if c.formatRaw {
-		for _, result := range results {
-			fmt.Println(result)
-		}
-		return nil
+		c.formatTemplate = lgrep.FormatRaw
 	}
 
 	var (
 		tabbed *tabwriter.Writer
 		format = c.formatTemplate
 	)
+
 	if c.formatTabulate {
 		format = tabifyFormat(c.formatTemplate, false)
 		header := tabifyFormat(format, true)
@@ -268,13 +265,34 @@ func (c Config) format(results []lgrep.Result, out io.Writer) error {
 		defer tabbed.Flush()
 		fmt.Fprintln(tabbed, header)
 	}
-	msgs, err := lgrep.Format(results, c.formatTemplate)
+
+	lformat, err := lgrep.Formatter(format)
+	if err != nil {
+		return f, err
+	}
+
+	f = func(r lgrep.Result) error {
+		msg, err := lformat(r)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "%s\n", msg)
+		return nil
+	}
+
+	return f, err
+}
+
+// Format and print the results according to config to the specified
+// out.
+func (c Config) format(results []lgrep.Result, out io.Writer) error {
+	f, err := c.formatter(out)
 	if err != nil {
 		return err
 	}
 
-	for i := range msgs {
-		fmt.Fprintln(out, msgs[i])
+	for _, r := range results {
+		f(r)
 	}
 	return nil
 }
@@ -305,23 +323,42 @@ func RunQuery(c *cli.Context) (err error) {
 		run.queryFields = strings.Split(qf, ",")
 	}
 
+	// Always fetch fields *and* timestamp fields!
 	if len(run.queryFields) != 0 {
 		run.queryFields = append(run.queryFields, "@timestamp", "date")
 	}
 
-	results, err := run.search()
+	formatter, err := run.formatter(os.Stdout)
 	if err != nil {
-		log.Fatal(err)
+		log.Error(err)
+		return err
+	}
+	stream, err := run.searchStream()
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+	count := 0
+	resultFn := func(r lgrep.Result) error {
+		count++
+		err = formatter(r)
+		if err != nil {
+			log.Warn(errors.Annotate(err, "error formatting result"))
+		}
+		return nil
+	}
+	errFn := func(e error) error { return e }
+	err = stream.Each(resultFn, errFn)
+	if err != nil {
+		log.Error(err)
+		return err
 	}
 
-	if len(results) == 0 {
+	if count == 0 {
 		log.Warn("0 results returned")
 		return nil
 	}
-	err = run.format(results, os.Stdout)
-	if err != nil {
-		log.Fatal(err)
-	}
+
 	return err
 }
 

@@ -15,6 +15,7 @@ import (
 
 const (
 	normalTSField = "timestamp"
+	FormatRaw     = "{{.}}"
 )
 
 var (
@@ -80,18 +81,19 @@ func IsRawFormat(str string) bool {
 	return strings.Contains(str, "{{.}}")
 }
 
-// Format templates documents into strings for output
-func Format(results []Result, format string) (msgs []string, err error) {
+// Formatter creates a function that may be used for formatting a
+// Result at a time.
+func Formatter(format string) (f func(Result) (s []byte, ferr error), err error) {
 	// If its raw, cleanup the json and then spit that out
 	if IsRawFormat(format) {
-		for _, result := range results {
-			json, err := result.JSON()
+		f = func(r Result) (s []byte, ferr error) {
+			json, ferr := r.JSON()
 			if err != nil {
-				return msgs, err
+				return s, ferr
 			}
-			msgs = append(msgs, string(json))
+			return json, ferr
 		}
-		return msgs, nil
+		return f, nil
 	}
 
 	format = CurlyFormat(format)
@@ -102,23 +104,43 @@ func Format(results []Result, format string) (msgs []string, err error) {
 		"ftime": strftime,
 	}).Parse(format)
 	if err != nil {
-		return msgs, errors.Annotate(err, "Format template invalid")
+		return f, errors.Annotate(err, "Format template invalid")
 	}
-	log.Debugf("Formatting %d results", len(results))
-	for _, result := range results {
-		data, err := result.Map()
-		if err != nil {
-			return msgs, err
-		}
 
+	f = func(r Result) (s []byte, ferr error) {
+		data, ferr := r.Map()
+		if ferr != nil {
+			return s, ferr
+		}
 		data = normalizeTS(data)
 
 		var buf bytes.Buffer
-		err = tmpl.Execute(&buf, data)
+		ferr = tmpl.Execute(&buf, data)
+		if ferr != nil {
+			return s, ferr
+		}
+
+		return bytes.TrimSpace(buf.Bytes()), ferr
+	}
+
+	return f, err
+
+}
+
+// Format templates documents into strings for output
+func Format(results []Result, format string) (msgs []string, err error) {
+	f, err := Formatter(format)
+	if err != nil {
+		return msgs, err
+	}
+	log.Debugf("Formatting %d results", len(results))
+	for _, result := range results {
+		m, err := f(result)
 		if err != nil {
 			return msgs, err
 		}
-		msgs = append(msgs, string(bytes.TrimSpace(buf.Bytes())))
+
+		msgs = append(msgs, string(m))
 	}
 	return msgs, nil
 }

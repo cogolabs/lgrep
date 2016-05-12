@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	scrollChunk = 300
+	MaxSearchSize = 10000
+	scrollChunk   = 300
 )
 
 // SearchStream is a stream of results that manages the execution and
@@ -65,6 +66,20 @@ func (s SearchStream) Quit() {
 // that were read, this exits immediately on any error that is
 // encountered.
 func (s SearchStream) All() (results []Result, err error) {
+	resultFn := func(r Result) error {
+		results = append(results, r)
+		return nil
+	}
+	// Exit immediately on error!
+	errFn := func(err error) error { return err }
+	return results, s.Each(resultFn, errFn)
+}
+
+// Each executes a function with each result that is read from the
+// channel, resultFn and errFn are called when messages are read from
+// their respective messages are recieved. If errFn or resultFn
+// returns an error, the stream is shutdown.
+func (s SearchStream) Each(resultFn func(Result) error, errFn func(error) error) (err error) {
 stream:
 	for {
 		select {
@@ -72,8 +87,11 @@ stream:
 			if streamErr == nil && !ok {
 				continue
 			}
+			err = errFn(streamErr)
+			if err == nil {
+				continue
+			}
 			log.Debug("Error encountered, stopping any ongoing search")
-			err = streamErr
 			s.Quit()
 			break stream
 
@@ -81,13 +99,16 @@ stream:
 			if result == nil && !ok {
 				break stream
 			}
-			results = append(results, result)
+			err = resultFn(result)
+			if err != nil {
+				break stream
+			}
 		}
 	}
 	log.Debug("Waiting for stream to clean up")
 	s.Wait()
 
-	return results, err
+	return err
 }
 
 // execute runs the search and accommodates any necessary work to
