@@ -247,10 +247,11 @@ func (c Config) searchStream() (stream *lgrep.SearchStream, err error) {
 }
 
 // formatter returns a function that writes a formatted result to `out`.
-func (c Config) formatter(out io.Writer) (f func(lgrep.Result) error, err error) {
+func (c Config) formatter(out io.Writer) (f func(lgrep.Result) error, flush func(), err error) {
 	if c.formatRaw {
 		c.formatTemplate = lgrep.FormatRaw
 	}
+	flush = func() {}
 
 	var (
 		tabbed *tabwriter.Writer
@@ -262,13 +263,13 @@ func (c Config) formatter(out io.Writer) (f func(lgrep.Result) error, err error)
 		header := tabifyFormat(format, true)
 		tabbed = tabwriter.NewWriter(out, 6, 2, 2, ' ', 0)
 		out = tabbed
-		defer tabbed.Flush()
+		flush = func() { tabbed.Flush() }
 		fmt.Fprintln(tabbed, header)
 	}
 
 	lformat, err := lgrep.Formatter(format)
 	if err != nil {
-		return f, err
+		return f, flush, err
 	}
 
 	f = func(r lgrep.Result) error {
@@ -280,21 +281,7 @@ func (c Config) formatter(out io.Writer) (f func(lgrep.Result) error, err error)
 		return nil
 	}
 
-	return f, err
-}
-
-// Format and print the results according to config to the specified
-// out.
-func (c Config) format(results []lgrep.Result, out io.Writer) error {
-	f, err := c.formatter(out)
-	if err != nil {
-		return err
-	}
-
-	for _, r := range results {
-		f(r)
-	}
-	return nil
+	return f, flush, err
 }
 
 // RunQuery is the primary action that the lgrep application performs.
@@ -328,11 +315,12 @@ func RunQuery(c *cli.Context) (err error) {
 		run.queryFields = append(run.queryFields, "@timestamp", "date")
 	}
 
-	formatter, err := run.formatter(os.Stdout)
+	formatter, flush, err := run.formatter(os.Stdout)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
+	defer flush()
 	stream, err := run.searchStream()
 	if err != nil {
 		log.Error(err)
