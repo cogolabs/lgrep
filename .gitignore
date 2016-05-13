@@ -4,3 +4,4 @@ release
 .*~
 ~*
 /lgrep
+cmd/lgrep/lgrep
