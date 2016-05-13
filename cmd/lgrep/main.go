@@ -22,7 +22,7 @@ const (
 	// user does not provide a format.
 	DefaultFormat = ".message"
 	// StdlineFormat provides a common usable format
-	StdlineFormat = ".host .service .message"
+	StdlineFormat = ".timestamp .host .service .message"
 )
 
 var (
