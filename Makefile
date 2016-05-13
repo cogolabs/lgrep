@@ -1,5 +1,5 @@
 VERSION ?= $(shell git describe --dirty --tags)
-GIT_REF := $(shell git describe --always)
+GIT_REF := $(shell git rev-parse HEAD | grep -o -E '^.{6}')
 RELEASE_DIR := $(shell pwd)/release/$(VERSION)
 BUILD_FLAGS := -ldflags "-X main.Version=$(VERSION) -X main.Commit=$(GIT_REF)"
 
@@ -7,9 +7,9 @@ BUILD_FLAGS := -ldflags "-X main.Version=$(VERSION) -X main.Commit=$(GIT_REF)"
 
 
 release: build-linux build-osx
-	tar -C $(RELEASE_DIR)/linux-x86_64 -zcf $(RELEASE_DIR)/lgrep-linux-x86_64.tar.gz \
+	tar -C $(RELEASE_DIR)/linux-x86_64 -zcf $(RELEASE_DIR)/lgrep-$(VERSION)-linux-x86_64.tar.gz \
 		lgrep
-	tar -C $(RELEASE_DIR)/macos-x86_64 -zcf $(RELEASE_DIR)/lgrep-macos-x86_64.tar.gz \
+	tar -C $(RELEASE_DIR)/macos-x86_64 -zcf $(RELEASE_DIR)/lgrep-$(VERSION)-macos-x86_64.tar.gz \
 		lgrep
 
 build-linux:
