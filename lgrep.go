@@ -89,15 +89,10 @@ func (l LGrep) SimpleSearch(q string, spec *SearchOptions) (results []Result, er
 // search stream that can be read.
 func (l LGrep) SearchWithSourceStream(raw interface{}, spec *SearchOptions) (stream *SearchStream, err error) {
 	search, _ := l.NewSearch()
-	if spec != nil {
-		// If user wants 0 then they're really not looking to get any
-		// results, don't execute.
-		if spec.Size == 0 {
-			return nil, ErrZeroSize
-		}
-	} else {
+	if spec == nil {
 		spec = &DefaultSpec
 	}
+
 	spec.configureSearch(search)
 	var query elastic.Query
 	switch v := raw.(type) {
