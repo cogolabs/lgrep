@@ -97,6 +97,29 @@ func TestSearchFields(t *testing.T) {
 	}
 }
 
+func TestRawResultQuery(t *testing.T) {
+	l, err := New(TestEndpoint)
+	if err != nil {
+		t.Fatalf("Client error: %s", err)
+	}
+
+	opts := &SearchOptions{Size: 1, RawResult: true}
+	results, err := l.SimpleSearch("*", opts)
+	if err != nil {
+		t.Fatalf("Error performing search: %s", err)
+	}
+	if len(results) != opts.Size {
+		t.Fatalf("Number of results %d was not the expected amount %d.", len(results), opts.Size)
+	}
+	if hit, ok := results[0].(HitResult); ok {
+		if hit.Id == "" {
+			t.Fatal("Raw result should have had an ID")
+		}
+	} else {
+		t.Fatalf("Hit (%T) was not a HitResult", hit)
+	}
+}
+
 func TestValidateQuery(t *testing.T) {
 	var (
 		Valid    error

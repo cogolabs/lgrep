@@ -141,6 +141,9 @@ func (l LGrep) SearchWithSource(raw interface{}, spec *SearchOptions) (results [
 
 //
 func extractResult(hit *elastic.SearchHit, spec SearchOptions) (result Result, err error) {
+	if spec.RawResult {
+		return HitResult(*hit), nil
+	}
 	if len(spec.Fields) != 0 && len(hit.Fields) != 0 {
 		return FieldResult(hit.Fields), nil
 	}

@@ -2,6 +2,8 @@ package lgrep
 
 import (
 	"encoding/json"
+
+	"gopkg.in/olivere/elastic.v3"
 )
 
 // Result is a generic result from a search.
@@ -57,6 +59,35 @@ func (sr SourceResult) JSON() ([]byte, error) {
 // purposes.
 func (sr SourceResult) String() string {
 	b, err := sr.JSON()
+	if err != nil {
+		return err.Error()
+	}
+	return string(b)
+}
+
+// HitResult contains the entire result object from the response - in
+// reality these exist only for compatibility, its suggested that you
+// type check these and use the object directly.
+type HitResult elastic.SearchHit
+
+// Map returns the entire result marshalled as a map.
+func (hr HitResult) Map() (data map[string]interface{}, err error) {
+	hrJSON, err := hr.JSON()
+	if err != nil {
+		return data, err
+	}
+	err = json.Unmarshal(hrJSON, &data)
+	return data, err
+}
+
+// JSON jsonifies the entire result.
+func (hr HitResult) JSON() (data []byte, err error) {
+	return json.Marshal(hr)
+}
+
+// String returns a stringified version of the result.
+func (hr HitResult) String() string {
+	b, err := hr.JSON()
 	if err != nil {
 		return err.Error()
 	}

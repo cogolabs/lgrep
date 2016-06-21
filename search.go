@@ -87,6 +87,8 @@ type SearchOptions struct {
 	// QuerySkipValidate causes the query to be submitted to the server
 	// without a pre-validation step.
 	QuerySkipValidate bool
+	// RawResult will cause results to contain the entire returned hit.
+	RawResult bool
 }
 
 // buildURL generates the url parts that are appropriate to the
