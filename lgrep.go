@@ -108,6 +108,8 @@ func (l LGrep) SearchWithSourceStream(raw interface{}, spec *SearchOptions) (str
 		query, err = QueryMapFromJSON(data)
 	case map[string]interface{}:
 		query = QueryMap(v)
+	case QueryMap:
+		query = v
 	default:
 		log.Fatalf("SearchWithSource does not support type '%T' at this time.", v)
 	}
