@@ -16,6 +16,12 @@ const (
 	scrollChunk   = 100
 )
 
+var (
+	// EOS is the sentinel value indicating that the end of stream has
+	// been reached.
+	EOS Result = nil
+)
+
 // SearchStream is a stream of results that manages the execution and
 // consumption of that stream.
 type SearchStream struct {
@@ -80,7 +86,9 @@ func (s *SearchStream) All() (results []Result, err error) {
 // Each executes a function with each result that is read from the
 // channel, resultFn and errFn are called when messages are read from
 // their respective messages are received. If errFn or resultFn
-// returns an error, the stream is shutdown.
+// returns an error, the stream will shutdown early. The resultFn will
+// be passed a nil value when the stream is finished thereby
+// indicating the end of the stream.
 func (s *SearchStream) Each(resultFn func(Result) error, errFn func(error) error) (err error) {
 stream:
 	for {
@@ -99,15 +107,18 @@ stream:
 
 		case result, ok := <-s.Results:
 			if result == nil && !ok {
+				log.Debug("Stream results dried up, breaking out.")
+				err = resultFn(EOS)
 				break stream
 			}
 			err = resultFn(result)
 			if err != nil {
+				log.Debug("An error occurred with upstream handler, breaking out")
 				break stream
 			}
 		}
 	}
-	log.Debug("Waiting for stream to clean up")
+	log.Debug("Exiting stream loop, waiting for stream to clean up")
 	s.Wait()
 
 	return err
