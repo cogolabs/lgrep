@@ -57,6 +57,10 @@ var (
 			Usage: "Output the raw json _source of the results (1 line per result)",
 		},
 		cli.BoolFlag{
+			Name:  "raw-doc-json, J",
+			Usage: "Output the entire document including '_*' fields, (1 line per result)",
+		},
+		cli.BoolFlag{
 			Name:  "format-stdline, tt",
 			Usage: "Format lines with common format '" + StdlineFormat + "'.",
 		},
@@ -191,12 +195,13 @@ type Config struct {
 	debug    bool
 
 	// Query configuration
-	queryFile   string
-	querySize   int
-	queryIndex  string
-	queryDebug  bool
-	queryFields []string
-	query       string
+	queryFile      string
+	querySize      int
+	queryIndex     string
+	queryDebug     bool
+	queryFields    []string
+	queryRawResult bool
+	query          string
 
 	// Formatting configuration
 	formatTemplate string
@@ -218,6 +223,7 @@ func (c Config) searchStream() (stream *lgrep.SearchStream, err error) {
 		SortTime:   lgrep.SortDesc,
 		QueryDebug: c.queryDebug,
 		Fields:     c.queryFields,
+		RawResult:  c.queryRawResult,
 	}
 	if c.debug {
 		fmt.Fprintf(os.Stderr, "q> SearchOptions: %#+v\n", spec)
@@ -290,15 +296,16 @@ func RunQuery(c *cli.Context) (err error) {
 		endpoint: c.String("endpoint"),
 		debug:    c.Bool("debug"),
 
-		queryFile:   c.String("query-file"),
-		querySize:   c.Int("query-size"),
-		queryIndex:  c.String("query-index"),
-		queryDebug:  c.Bool("query-debug"),
-		queryFields: []string{},
-		query:       strings.Join(c.Args(), " "),
+		queryFile:      c.String("query-file"),
+		querySize:      c.Int("query-size"),
+		queryIndex:     c.String("query-index"),
+		queryDebug:     c.Bool("query-debug"),
+		queryFields:    []string{},
+		queryRawResult: c.Bool("raw-doc-json"),
+		query:          strings.Join(c.Args(), " "),
 
 		formatTemplate: c.String("format"),
-		formatRaw:      c.Bool("raw-json"),
+		formatRaw:      c.Bool("raw-json") || c.Bool("raw-doc-json"),
 		formatTabulate: c.Bool("tabulate"),
 	}
 
