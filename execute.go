@@ -75,6 +75,9 @@ func (s *SearchStream) Quit() {
 // encountered.
 func (s *SearchStream) All() (results []Result, err error) {
 	resultFn := func(r Result) error {
+		if r == EOS {
+			return nil
+		}
 		results = append(results, r)
 		return nil
 	}
