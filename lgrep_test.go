@@ -43,6 +43,21 @@ func TestSearch(t *testing.T) {
 	}
 }
 
+func TestLargeSearch(t *testing.T) {
+	l, err := New(TestEndpoint)
+	if err != nil {
+		t.Fatalf("Client error: %s", err)
+	}
+	opts := &SearchOptions{Size: MaxSearchSize + 10, Index: "journald-*"}
+	docs, err := l.SimpleSearch("*", opts)
+	if err != nil {
+		t.Fatalf("Error running search: %s", err)
+	}
+	if len(docs) != opts.Size {
+		t.Errorf("Search should have retrieved %d docs as specified, returned %d", opts.Size, len(docs))
+	}
+}
+
 func TestSearchFormat(t *testing.T) {
 	expected := "network"
 	l, err := New(TestEndpoint)
