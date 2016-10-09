@@ -63,7 +63,7 @@ func TestIssue11(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	results, err := l.SimpleSearch("*", &lgrep.SearchOptions{Size: tooLargeSize, Index: "journald-*", Fields: []string{"hostname"}})
+	results, err := l.SimpleSearch("*", &lgrep.SearchOptions{Size: tooLargeSize, Index: "journald-*", Fields: []string{"host"}})
 	if err != nil {
 		t.Fatalf("Error retrieving %d results: %s", tooLargeSize, err)
 	}
