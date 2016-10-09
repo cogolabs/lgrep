@@ -169,8 +169,11 @@ func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec 
 		scroll.Query(query)
 		scroll.KeepAlive("30s")
 
+		log.Debugf("searching with scroll for large size (%d)", spec.Size)
+
 		go l.executeScroll(scroll, query, spec, stream)
 	} else {
+		log.Debugf("searching with regular query for small size (%d)", spec.Size)
 		go l.executeSearcher(search, query, spec, stream)
 	}
 
@@ -293,11 +296,12 @@ func (l LGrep) executeSearcher(service Searcher, query elastic.Query, spec Searc
 		case <-stream.control.quit:
 			return
 		default:
-			result, err := extractResult(result.Hits.Hits[i], spec)
+			doc, err := extractResult(result.Hits.Hits[i], spec)
 			if err != nil {
 				stream.Errors <- err
+				continue
 			}
-			stream.Results <- result
+			stream.Results <- doc
 		}
 	}
 }
