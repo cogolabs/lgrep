@@ -1,6 +1,7 @@
 package lgrep
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/url"
 	"strings"
@@ -36,7 +37,11 @@ func (q QueryMap) Source() (interface{}, error) {
 // QueryMapFromJSON transforms JSON blobs into a QueryMap for querying.
 func QueryMapFromJSON(data []byte) (qm QueryMap, err error) {
 	qm = make(QueryMap)
-	err = json.Unmarshal(data, &qm)
+	buf := bytes.NewBuffer(data)
+	d := json.NewDecoder(buf)
+	d.UseNumber()
+	err = d.Decode(&qm)
+
 	return qm, err
 }
 
