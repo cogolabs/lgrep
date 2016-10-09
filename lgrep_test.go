@@ -24,7 +24,6 @@ func init() {
 	}
 	testJSONQuery = json.RawMessage(data)
 	log.SetLevel(log.DebugLevel)
-	var _ = log.Logger{}
 }
 
 var TestEndpoint = "http://localhost:9200"
@@ -40,7 +39,7 @@ func TestSearch(t *testing.T) {
 		t.Fatalf("Error running search: %s", err)
 	}
 	if len(docs) != 10 {
-		t.Error("Search should have retrieved 10 docs as specified")
+		t.Errorf("Search should have retrieved 10 docs as specified, returned %d", len(docs))
 	}
 }
 
@@ -56,7 +55,7 @@ func TestSearchFormat(t *testing.T) {
 		t.Fatalf("Error running search: %s", err)
 	}
 	if len(docs) != 1 {
-		t.Fatalf("Search should have retrieved 10 docs as specified")
+		t.Fatalf("Search should have retrieved 1 docs as specified, returned %d", len(docs))
 	}
 	msgs1, err := Format(docs, "{{.type}}")
 	if err != nil {
@@ -83,7 +82,7 @@ func TestSearchFields(t *testing.T) {
 		t.Fatalf("Error running search: %s", err)
 	}
 	if len(results) != 1 {
-		t.Fatalf("Search should have retrieved 1 results as specified")
+		t.Fatalf("Search should have retrieved 1 results as specified, returned %d", len(results))
 	}
 	msgs1, err := Format(results, "{{.type}}")
 	if err != nil {
@@ -168,8 +167,6 @@ func TestValidateQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	log.SetLevel(log.DebugLevel)
 
 	for _, testcase := range expectations {
 		var result ValidationResponse
