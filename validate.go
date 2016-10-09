@@ -24,20 +24,21 @@ var (
 
 // ValidationResponse is the Elasticsearch validation result payload.
 type ValidationResponse struct {
-	Valid  bool
+	Valid  bool `json:"valid"`
 	Shards struct {
-		Total      int
-		Successful int
-		Failed     int
+		Total      int                      `json:"total"`
+		Successful int                      `json:"successful"`
+		Failed     int                      `json:"failed"`
+		Failures   []map[string]interface{} `json:"failures"`
 	} `json:"_shards"`
-	Explanations []ValidationExplanation
+	Explanations []ValidationExplanation `json:"explanations,omit"`
 }
 
 // ValidationExplanation is a per-index explanation of a invalid query
 // validation result.
 type ValidationExplanation struct {
-	Index   string
-	Valid   bool
+	Index   string `json:"index"`
+	Valid   bool   `json:"valid"`
 	Message string `json:"error"`
 	Error   error  `json:"-"`
 }
@@ -57,7 +58,7 @@ func (l LGrep) validate(query interface{}, spec SearchOptions) (result Validatio
 	if err != nil {
 		return result, err
 	}
-	if result.Valid {
+	if result.Valid && result.Shards.Successful != 0 {
 		return result, nil
 	}
 
