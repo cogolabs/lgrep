@@ -108,14 +108,20 @@ func (l LGrep) SearchWithSourceStream(raw interface{}, spec *SearchOptions) (str
 	default:
 		log.Fatalf("SearchWithSource does not support type '%T' at this time.", v)
 	}
+	// Set the search source to the provided raw one.
+	source, _ := query.Source()
+	search.Source(source)
 
 	if spec.QueryDebug {
 		printQueryDebug(os.Stderr, query)
 	}
 
 	if !spec.QuerySkipValidate {
-		_, err := l.validate(query, *spec)
+		vresp, err := l.validate(query, *spec)
 		if err != nil {
+			if spec.QueryDebug {
+				printQueryDebug(os.Stderr, vresp)
+			}
 			return nil, err
 		}
 	}
