@@ -109,9 +109,10 @@ func (s *SearchService) Routing(routings ...string) *SearchService {
 }
 
 // Preference sets the preference to execute the search. Defaults to
-// randomize across shards. Can be set to "_local" to prefer local shards,
-// "_primary" to execute on primary shards only, or a custom value which
-// guarantees that the same order will be used across different requests.
+// randomize across shards ("random"). Can be set to "_local" to prefer
+// local shards, "_primary" to execute on primary shards only,
+// or a custom value which guarantees that the same order will be used
+// across different requests.
 func (s *SearchService) Preference(preference string) *SearchService {
 	s.preference = preference
 	return s
@@ -299,6 +300,9 @@ func (s *SearchService) buildURL() (string, url.Values, error) {
 	if s.routing != "" {
 		params.Set("routing", s.routing)
 	}
+	if s.preference != "" {
+		params.Set("preference", s.preference)
+	}
 	if s.allowNoIndices != nil {
 		params.Set("allow_no_indices", fmt.Sprintf("%v", *s.allowNoIndices))
 	}
@@ -347,7 +351,7 @@ func (s *SearchService) Do() (*SearchResult, error) {
 
 	// Return search results
 	ret := new(SearchResult)
-	if err := json.Unmarshal(res.Body, ret); err != nil {
+	if err := s.client.decoder.Decode(res.Body, ret); err != nil {
 		return nil, err
 	}
 	return ret, nil

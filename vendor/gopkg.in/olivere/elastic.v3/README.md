@@ -109,6 +109,7 @@ _, err = client.Index().
     Type("tweet").
     Id("1").
     BodyJson(tweet).
+    Refresh(true).
     Do()
 if err != nil {
     // Handle error
@@ -147,7 +148,7 @@ for _, item := range searchResult.Each(reflect.TypeOf(ttyp)) {
 fmt.Printf("Found a total of %d tweets\n", searchResult.TotalHits())
 
 // Here's how you iterate through results with full control over each step.
-if searchResult.Hits != nil {
+if searchResult.Hits.TotalHits > 0 {
     fmt.Printf("Found a total of %d tweets\n", searchResult.Hits.TotalHits)
 
     // Iterate through results
@@ -177,6 +178,8 @@ if err != nil {
 }
 ```
 
+Here's a [link to a complete working example](https://gist.github.com/olivere/114347ff9d9cfdca7bdc0ecea8b82263).
+
 See the [wiki](https://github.com/olivere/elastic/wiki) for more details.
 
 
@@ -187,14 +190,14 @@ See the [wiki](https://github.com/olivere/elastic/wiki) for more details.
 - [x] Index API
 - [x] Get API
 - [x] Delete API
+- [x] Delete By Query API
 - [x] Update API
 - [x] Update By Query API
 - [x] Multi Get API
 - [x] Bulk API
 - [x] Reindex API
-- [x] Delete By Query API
 - [x] Term Vectors
-- [ ] Multi termvectors API
+- [x] Multi termvectors API
 
 ### Search APIs
 
@@ -212,7 +215,7 @@ See the [wiki](https://github.com/olivere/elastic/wiki) for more details.
 - [ ] Validate API
 - [x] Explain API
 - [x] Percolator API
-- [ ] Field Stats API
+- [x] Field Stats API
 
 ### Aggregations
 

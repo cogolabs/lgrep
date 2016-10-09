@@ -21,7 +21,7 @@ import (
 
 const (
 	// Version is the current version of Elastic.
-	Version = "3.0.34"
+	Version = "3.0.47"
 
 	// DefaultUrl is the default endpoint of Elasticsearch on the local machine.
 	// It is used e.g. when initializing a new Client without a specific URL.
@@ -680,9 +680,10 @@ func (c *Client) dumpResponse(resp *http.Response) {
 func (c *Client) sniffer() {
 	c.mu.RLock()
 	timeout := c.snifferTimeout
+	interval := c.snifferInterval
 	c.mu.RUnlock()
 
-	ticker := time.NewTicker(timeout)
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -869,9 +870,10 @@ func (c *Client) updateConns(conns []*conn) {
 func (c *Client) healthchecker() {
 	c.mu.RLock()
 	timeout := c.healthcheckTimeout
+	interval := c.healthcheckInterval
 	c.mu.RUnlock()
 
-	ticker := time.NewTicker(timeout)
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -1237,8 +1239,19 @@ func (c *Client) ReindexTask() *ReindexService {
 	return NewReindexService(c)
 }
 
-// TODO Term Vectors
-// TODO Multi termvectors API
+// TermVectors returns information and statistics on terms in the fields
+// of a particular document.
+func (c *Client) TermVectors(index, typ string) *TermvectorsService {
+	builder := NewTermvectorsService(c)
+	builder = builder.Index(index).Type(typ)
+	return builder
+}
+
+// MultiTermVectors returns information and statistics on terms in the fields
+// of multiple documents.
+func (c *Client) MultiTermVectors() *MultiTermvectorService {
+	return NewMultiTermvectorService(c)
+}
 
 // -- Search APIs --
 
@@ -1277,7 +1290,11 @@ func (c *Client) Percolate() *PercolateService {
 // TODO Search Shards API
 // TODO Search Exists API
 // TODO Validate API
-// TODO Field Stats API
+
+// FieldStats returns statistical information about fields in indices.
+func (c *Client) FieldStats(indices ...string) *FieldStatsService {
+	return NewFieldStatsService(c).Index(indices...)
+}
 
 // Exists checks if a document exists.
 func (c *Client) Exists() *ExistsService {
@@ -1584,12 +1601,4 @@ func (c *Client) WaitForGreenStatus(timeout string) error {
 // See WaitForStatus for more details.
 func (c *Client) WaitForYellowStatus(timeout string) error {
 	return c.WaitForStatus("yellow", timeout)
-}
-
-// TermVectors returns information and statistics on terms in the fields
-// of a particular document.
-func (c *Client) TermVectors(index, typ string) *TermvectorsService {
-	builder := NewTermvectorsService(c)
-	builder = builder.Index(index).Type(typ)
-	return builder
 }

@@ -5,7 +5,6 @@
 package elastic
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -129,8 +128,6 @@ func (s *ScrollService) GetFirstPage() (*SearchResult, error) {
 
 	// Parameters
 	params := make(url.Values)
-	// TODO: ES 2.1 deprecates search_type=scan. See https://www.elastic.co/guide/en/elasticsearch/reference/current/breaking_21_search_changes.html#_literal_search_type_scan_literal_deprecated.
-	params.Set("search_type", "scan")
 	if s.pretty {
 		params.Set("pretty", fmt.Sprintf("%v", s.pretty))
 	}
@@ -143,9 +140,14 @@ func (s *ScrollService) GetFirstPage() (*SearchResult, error) {
 		params.Set("size", fmt.Sprintf("%d", *s.size))
 	}
 
-	body, err := s.query.Source()
-	if err != nil {
-		return nil, err
+	// Set body
+	body := make(map[string]interface{})
+	if s.query != nil {
+		src, err := s.query.Source()
+		if err != nil {
+			return nil, err
+		}
+		body["query"] = src
 	}
 
 	// Get response
@@ -156,7 +158,7 @@ func (s *ScrollService) GetFirstPage() (*SearchResult, error) {
 
 	// Return result
 	searchResult := new(SearchResult)
-	if err := json.Unmarshal(res.Body, searchResult); err != nil {
+	if err := s.client.decoder.Decode(res.Body, searchResult); err != nil {
 		return nil, err
 	}
 
@@ -190,7 +192,7 @@ func (s *ScrollService) GetNextPage() (*SearchResult, error) {
 
 	// Return result
 	searchResult := new(SearchResult)
-	if err := json.Unmarshal(res.Body, searchResult); err != nil {
+	if err := s.client.decoder.Decode(res.Body, searchResult); err != nil {
 		return nil, err
 	}
 

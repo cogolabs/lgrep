@@ -5,7 +5,6 @@
 package elastic
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -323,7 +322,7 @@ func (s *TermvectorsService) Do() (*TermvectorsResponse, error) {
 
 	// Return operation response
 	ret := new(TermvectorsResponse)
-	if err := json.Unmarshal(res.Body, ret); err != nil {
+	if err := s.client.decoder.Decode(res.Body, ret); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -430,6 +429,7 @@ type TokenInfo struct {
 
 type TermsInfo struct {
 	DocFreq  int64       `json:"doc_freq"`
+	Score    float64     `json:"score"`
 	TermFreq int64       `json:"term_freq"`
 	Ttf      int64       `json:"ttf"`
 	Tokens   []TokenInfo `json:"tokens"`
