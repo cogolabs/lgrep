@@ -16,12 +16,6 @@ const (
 	scrollChunk   = 100
 )
 
-var (
-	// EOS is the sentinel value indicating that the end of stream has
-	// been reached.
-	EOS Result = nil
-)
-
 // SearchStream is a stream of results that manages the execution and
 // consumption of that stream.
 type SearchStream struct {
@@ -75,9 +69,6 @@ func (s *SearchStream) Quit() {
 // encountered.
 func (s *SearchStream) All() (results []Result, err error) {
 	resultFn := func(r Result) error {
-		if r == EOS {
-			return nil
-		}
 		results = append(results, r)
 		return nil
 	}
@@ -111,7 +102,6 @@ stream:
 		case result, ok := <-s.Results:
 			if result == nil && !ok {
 				log.Debug("Stream results dried up, breaking out.")
-				err = resultFn(EOS)
 				break stream
 			}
 			err = resultFn(result)
