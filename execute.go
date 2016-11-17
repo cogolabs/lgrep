@@ -1,6 +1,7 @@
 package lgrep
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -121,7 +122,7 @@ stream:
 // ensure the search is executed properly.
 func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec SearchOptions) (stream *SearchStream, err error) {
 	stream = &SearchStream{
-		Results: make(chan Result, 93),
+		Results: make(chan Result, scrollChunk),
 		Errors:  make(chan error, 1),
 	}
 	if spec.QueryDebug {
@@ -182,6 +183,8 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 	defer close(stream.Results)
 	defer close(stream.Errors)
 
+	ctx, cancelReq := context.WithCancel(context.TODO())
+
 scrollLoop:
 	for {
 		if nextScrollID != "" {
@@ -194,7 +197,7 @@ scrollLoop:
 			log.Debug("Fetching first page of scroll")
 		}
 
-		results, err := scroll.Do()
+		results, err := scroll.DoC(ctx)
 		if err != nil {
 			log.Debugf("An error was returned during scroll after %d results.", resultCount)
 			if err != elastic.EOS {
@@ -216,6 +219,7 @@ scrollLoop:
 			}
 			select {
 			case <-stream.control.quit:
+				cancelReq()
 				log.Debug("Stream instructed to quit")
 				break scrollLoop
 			case stream.Results <- result:
@@ -229,8 +233,6 @@ scrollLoop:
 	}
 
 	l.ClearScroll(nextScrollID).Do()
-
-	log.Debug("Scroll execution complete, please stream.Wait() for cleanup.")
 }
 
 func (l LGrep) executeSearcher(service Searcher, query elastic.Query, spec SearchOptions, stream *SearchStream) {
