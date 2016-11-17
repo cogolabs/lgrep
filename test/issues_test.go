@@ -4,10 +4,17 @@ import (
 	"testing"
 
 	"github.com/cogolabs/lgrep"
+	log "github.com/Sirupsen/logrus"
+	"github.com/juju/errors"
+	"gopkg.in/olivere/elastic.v3"
 )
 
 const (
 )
+
+func init() {
+	log.SetLevel(log.DebugLevel)
+}
 
 // https://github.com/cogolabs/lgrep/issues/9
 func TestIssue9(t *testing.T) {
@@ -58,14 +65,16 @@ func TestIssue9(t *testing.T) {
 }
 
 func TestIssue11(t *testing.T) {
-	tooLargeSize := 10001
+	tooLargeSize := lgrep.MaxSearchSize + 1
 	l, err := lgrep.New(TestEndpoint)
 	if err != nil {
 		t.Fatal(err)
 	}
 	results, err := l.SimpleSearch("*", &lgrep.SearchOptions{Size: tooLargeSize, Index: "journald-*", Fields: []string{"host"}})
 	if err != nil {
-		t.Fatalf("Error retrieving %d results: %s", tooLargeSize, err)
+		eserr, _ := errors.Cause(err).(*elastic.Error)
+		t.Fatalf("%q\n", eserr.Details)
+		t.Fatalf("Error retrieving %d results: %s: %#v", tooLargeSize, err, err)
 	}
 	if len(results) != tooLargeSize {
 		t.Fatalf("Did not return requested amount %d, actual %d", tooLargeSize, len(results))
