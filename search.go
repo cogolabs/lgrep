@@ -170,3 +170,18 @@ func (s SearchOptions) configureScroll(scroll *elastic.ScrollService) {
 		scroll.Index(s.Indices...)
 	}
 }
+
+func (s SearchOptions) configureQueryMap(m map[string]interface{}) {
+	if m == nil {
+		m = make(map[string]interface{})
+	}
+
+	if s.Size != 0 {
+		m["size"] = s.Size
+	}
+	if len(s.Fields) != 0 {
+		fsc := elastic.NewFetchSourceContext(true)
+		source, _ := fsc.Include(s.Fields...).Source()
+		m["_source"] = source
+	}
+}

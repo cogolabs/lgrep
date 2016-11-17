@@ -13,8 +13,9 @@ import (
 const (
 	// MaxSearchSize is the maximum search size that is able to be
 	// performed before the search will necessitate a scroll.
-	MaxSearchSize = 10000
-	scrollChunk   = 100
+	MaxSearchSize   = 10000
+	scrollChunk     = 100
+	scrollKeepalive = "30s"
 )
 
 // SearchStream is a stream of results that manages the execution and
@@ -132,35 +133,36 @@ func (l LGrep) execute(search *elastic.SearchService, query elastic.Query, spec 
 	stream.control.WaitGroup = &sync.WaitGroup{}
 
 	if spec.Size > MaxSearchSize {
+		log.Debugf("searching with scroll for large size (%d)", spec.Size)
+
 		if spec.Index == "" || (spec.Index == "" && len(spec.Indices) == 0) {
 			return nil, errors.New("An index pattern must be given for large requests")
 		}
+
 		source, err := query.Source()
 		if err != nil {
 			return nil, err
 		}
-		// Remove the size key if possible, if its too large (which at
-		// this point it will be if configured by the spec), then the
-		// query will need to have the size key removed as that is a
-		// specification for how many results from each shard.
-		if queryMap, ok := source.(map[string]interface{}); ok {
-			qm := QueryMap(queryMap)
-			delete(qm, "size")
-			query = qm
-		}
 
 		scroll := l.Scroll()
+		scroll.KeepAlive(scrollKeepalive)
 		spec.configureScroll(scroll)
-		if scrollChunk <= 0 {
-			log.Fatal("YOU WILL DESTROY LOGSTASH, ABORTING.")
-		}
+		// reset to the chunk size, otherwise the entire result will
+		// (attempt to) be pulled in a single request
 		scroll.Size(scrollChunk)
-		// Must have been patched for `body = query` otherwise the
-		// ScrollService will nest the query further incorrectly.
-		scroll.Query(query)
-		scroll.KeepAlive("30s")
 
-		log.Debugf("searching with scroll for large size (%d)", spec.Size)
+		if queryMap, ok := source.(map[string]interface{}); ok {
+			log.Debugf("QueryMap provided, merging with specifications")
+			qm := QueryMap(queryMap)
+			spec.configureQueryMap(qm)
+			qm["size"] = scrollChunk
+			log.Debugf("QueryMap result: %#v", qm)
+			scroll.Body(qm)
+		} else {
+			// TODO: Verify any other query type and pass it into the query for the user.
+			log.Errorf("cannot execute scroll with provided query, unhandled")
+			return nil, errors.New("cannot execute scroll with provided query, unhandled")
+		}
 
 		go l.executeScroll(scroll, query, spec, stream)
 	} else {
