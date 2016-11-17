@@ -22,8 +22,8 @@
 		},
 		{
 			"ImportPath": "gopkg.in/olivere/elastic.v3",
-			"Comment": "v3.0.47",
-			"Rev": "908ffee99d2c7e5fc7cf6ddf437b1fb26f4bb286"
+			"Comment": "v3.0.56",
+			"Rev": "1ad75b5396674e9c783400e89106bc0c8da9d786"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
@@ -31,13 +31,21 @@
 		},
 		{
 			"ImportPath": "gopkg.in/olivere/elastic.v3/backoff",
-			"Comment": "v3.0.47",
-			"Rev": "908ffee99d2c7e5fc7cf6ddf437b1fb26f4bb286"
+			"Comment": "v3.0.56",
+			"Rev": "1ad75b5396674e9c783400e89106bc0c8da9d786"
 		},
 		{
 			"ImportPath": "gopkg.in/olivere/elastic.v3/uritemplates",
-			"Comment": "v3.0.47",
-			"Rev": "908ffee99d2c7e5fc7cf6ddf437b1fb26f4bb286"
+			"Comment": "v3.0.56",
+			"Rev": "1ad75b5396674e9c783400e89106bc0c8da9d786"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context",
+			"Rev": "4971afdc2f162e82d185353533d3cf16188a9f4e"
+		},
+		{
+			"ImportPath": "golang.org/x/net/context/ctxhttp",
+			"Rev": "4971afdc2f162e82d185353533d3cf16188a9f4e"
 		}
 	]
 }
