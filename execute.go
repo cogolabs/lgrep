@@ -175,43 +175,12 @@ func (l LGrep) executeScroll(scroll *elastic.ScrollService, query elastic.Query,
 	defer stream.control.Done()
 
 	var (
-		nextScrollID string
-		discardID    chan string
 		resultCount  int
+		nextScrollID string
 	)
-	discardID = make(chan string, 5)
-
-	go func() {
-		stream.control.Add(1)
-		defer stream.control.Done()
-		defer log.Debug("Scroll cleaner stopped")
-
-		var scrolls []string
-
-	receive:
-		for {
-			select {
-			case scrollID, ok := <-discardID:
-				if !ok {
-					break receive
-				}
-				if scrollID == "" {
-					continue
-				}
-				scrolls = append(scrolls, scrollID)
-			}
-		}
-		log.Debugf("Clearing %d scrolls", len(scrolls))
-		clear := l.Client.ClearScroll(scrolls...)
-		_, err := clear.Do()
-		if err != nil {
-			log.Warnf("Error clearing scrolls.")
-		}
-	}()
 
 	defer close(stream.Results)
 	defer close(stream.Errors)
-	defer close(discardID)
 
 scrollLoop:
 	for {
@@ -236,9 +205,7 @@ scrollLoop:
 
 		if results.ScrollId != "" {
 			if results.ScrollId != nextScrollID {
-				discardID <- nextScrollID
 				nextScrollID = results.ScrollId
-				log.Debugf("New scrollID returned: %s", nextScrollID[:10])
 			}
 		}
 
@@ -260,9 +227,9 @@ scrollLoop:
 			}
 		}
 	}
-	if nextScrollID != "" {
-		discardID <- nextScrollID
-	}
+
+	l.ClearScroll(nextScrollID).Do()
+
 	log.Debug("Scroll execution complete, please stream.Wait() for cleanup.")
 }
 
