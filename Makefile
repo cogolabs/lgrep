@@ -28,4 +28,8 @@ install:
 	go install $(BUILD_FLAGS) ./cmd/lgrep
 
 test:
-	go test . ./test ./cmd/lgrep
+	go list -f '{{if len .TestGoFiles}}"go test -v -short -coverprofile={{.Dir}}/.coverprofile {{.ImportPath}}"{{end}}' ./... | xargs -L 1 -t sh -c
+
+test-readme: install
+	grep -E '^\$$ lgrep' README.md | sed 's/\$$ lgrep//' | \
+		xargs -t -L1 lgrep >/dev/null
